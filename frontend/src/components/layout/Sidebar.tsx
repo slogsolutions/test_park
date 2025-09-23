@@ -50,6 +50,14 @@ export function Sidebar({
     { icon: UserCircle, label: 'profile', id: 'Profile' },
   ];
 
+  // accessible keyboard handler for toggles (Enter / Space)
+  const handleKeyToggle = (handler: () => void) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handler();
+    }
+  };
+
   return (
     <div className={`h-screen w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col ${className}`}>
       <div className="p-6 border-b border-gray-200 dark:border-gray-800">
@@ -84,39 +92,55 @@ export function Sidebar({
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Online Status</span>
-          <button
-            onClick={onToggleOnline}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+          <div
+            role="switch"
+            aria-checked={onlineStatus}
+            tabIndex={0}
+            onKeyDown={handleKeyToggle(onToggleOnline)}
+            title={onlineStatus ? 'Set offline' : 'Set online'}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 cursor-pointer ${
               onlineStatus ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
             }`}
+            onClick={onToggleOnline}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
                 onlineStatus ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
-          </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Theme</span>
-          <button
-            onClick={onToggleDarkMode}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
+
+          {/* Theme toggle — accessible and keyboard-operable */}
+          <div
+            role="switch"
+            aria-checked={darkMode}
+            tabIndex={0}
+            onKeyDown={handleKeyToggle(onToggleDarkMode)}
+            title={darkMode ? 'Switch to light theme' : 'Switch to dark theme'}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 cursor-pointer ${
               darkMode ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
             }`}
+            onClick={onToggleDarkMode}
           >
-            {darkMode ? (
-              <Moon className="h-4 w-4 text-white absolute left-1.5" />
-            ) : (
-              <Sun className="h-4 w-4 text-primary-500 absolute right-1.5" />
-            )}
+            {/* Icons positioned so they don't overlap the moving knob */}
+            {/* Moon on left for dark mode, Sun on right for light mode */}
+            <div className="pointer-events-none absolute left-1.5">
+              {darkMode ? <Moon className="h-4 w-4 text-white" /> : null}
+            </div>
+            <div className="pointer-events-none absolute right-1.5">
+              {!darkMode ? <Sun className="h-4 w-4 text-primary-500" /> : null}
+            </div>
+
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
                 darkMode ? 'translate-x-6' : 'translate-x-1'
               }`}
             />
-          </button>
+          </div>
         </div>
 
         <button
