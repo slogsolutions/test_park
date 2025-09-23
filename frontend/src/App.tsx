@@ -35,8 +35,12 @@ import FindParking from "./components/search/FindParking";
 import Profile from "./pages/Profile";
 import { buyerRoutes } from "./routes/BuyerRoutes";
 import { sellerRoutes } from "./routes/SellerRoutes";
+import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
 
 export default function App() {
+
+useFirebaseMessaging();
+
   return (
     <GoogleOAuthProvider clientId={env.GOOGLE_CLIENT_ID}>
       <AuthProvider>
