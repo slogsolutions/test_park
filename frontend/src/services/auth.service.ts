@@ -35,4 +35,9 @@ export const authService = {
     const response = await api.get('auth/me');
     return response.data;
   },
+    async setOnline(online: boolean) {
+    const response = await api.patch('auth/online', { online });
+    return response.data;
+  },
+
 };

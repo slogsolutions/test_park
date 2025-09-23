@@ -9,6 +9,7 @@ import {
   resetPassword,
   verifyEmail,
   resendVerification,
+  setOnlineStatus,
 } from '../controllers/auth.js';
 import { protect } from '../middleware/auth.js';
 
@@ -41,5 +42,7 @@ router.post('/forgot-password', forgotPassword);
 router.post('/reset-password/:token', resetPassword);
 router.get('/verify-email/:token', verifyEmail);
 router.post('/resend-verification', resendVerification);
+router.patch('/online', protect, setOnlineStatus);
+
 
 export default router;

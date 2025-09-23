@@ -47,6 +47,28 @@ export const register = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+// set online status for the authenticated user
+export const setOnlineStatus = async (req, res) => {
+  try {
+    // expect { online: true/false } in request body
+    const { online } = req.body;
+    if (typeof online !== 'boolean') {
+      return res.status(400).json({ message: 'Invalid online value' });
+    }
+
+    // req.user is attached by protect middleware (user doc without password)
+    req.user.onlineStatus = online;
+    await req.user.save();
+
+    return res.json({
+      message: 'Online status updated',
+      onlineStatus: req.user.onlineStatus,
+    });
+  } catch (err) {
+    console.error('setOnlineStatus error', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
 
 export const verifyEmail = async (req, res) => {
   try {
