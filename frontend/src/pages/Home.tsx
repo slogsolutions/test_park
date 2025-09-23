@@ -788,7 +788,6 @@ import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import { GeocodingResult } from '../utils/geocoding';
 import { MdLocationOn, MdFilterList, MdGpsFixed } from 'react-icons/md';
-// import { FaParking, FaUserCircle, FaUmbrella, FaShield, FaBolt, FaWheelchair, FaVideo } from 'react-icons/fa';
 import { FaParking, FaMapMarkerAlt, FaClock, FaShieldAlt, FaCar, FaBolt, FaWheelchair, FaVideo, FaUmbrella } from 'react-icons/fa';
 import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
