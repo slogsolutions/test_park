@@ -1,4 +1,4 @@
-import React from "react";
+// import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -21,7 +21,7 @@ import AdminPanel from "./pages/Admin";
 import VehicleDetails from "./pages/VehicleDetails";
 import MyBookings from "./components/parking/MyBookings";
 import ProviderBookings from "./pages/ProivderBookings";
-import Page from "./pages/Page";
+// import Page from "./pages/Page";
 import AddVehicle from "./pages/AddVechicle";
 import VehicleList from "./pages/VehicleList";
 import TrackNowPage from "./components/parking/TrackNowPage";
@@ -32,7 +32,9 @@ import Front from "./pages/Front";
 import Favorites from './pages/Favorite'
 import FindParking from "./components/search/FindParking";
 import Profile from "./pages/Profile";
-
+import {useFirebaseMessaging} from "./hooks/useFirebaseMessaging";
+import {useFCMToken} from "./context/FirebaseMessagingContext";
+import { useEffect } from "react";
 export default function App() {
   return (
     <GoogleOAuthProvider clientId={env.GOOGLE_CLIENT_ID}>
@@ -50,6 +52,53 @@ export default function App() {
 // 🔹 Component for managing dynamic routes
 function AppRoutes() {
   const { user } = useAuth(); // 🔹 Get user authentication status from context
+  
+  useFirebaseMessaging()
+  const { fcmToken } = useFCMToken();
+
+  
+      // For Notify Foreground 
+  // useEffect(() => {
+  //   const initFirebaseMessaging = async () => {
+  //     try {
+  //       // 1️⃣ Request notification permission
+  //       const permission = await Notification.requestPermission();
+  //       if (permission !== "granted") {
+  //         console.warn("Notification permission not granted");
+  //         return;
+  //       }
+
+  //       // 2️⃣ Get FCM token
+  //       const token = await getToken(messaging, {
+  //         vapidKey: "BIrqu-G8cdBfGaxbvCwBTfPYuFxcOqCQBfbDqcN1zy_e_lpxej2ehbjjmrAwq1PcjqrOFnsqj_IcpN2ssSbp-jo", // Replace with your key
+  //       });
+  //       console.log("FCM Token:", token);
+
+  //       // 3️⃣ Foreground message listener
+  //       onMessage(messaging, (payload) => {
+  //         console.log("Foreground message received:", payload);
+
+  //         // Show native notification immediately
+  //         if (payload.notification) {
+  //           new Notification(payload.notification.title || "Notification", {
+  //             body: payload.notification.body,
+  //             icon: payload.notification.icon || "/logo192.png",
+  //           });
+  //         }
+  //       });
+  //     } catch (err) {
+  //       console.error("Firebase messaging error:", err);
+  //     }
+  //   };
+
+  //   initFirebaseMessaging();
+  // }, []);
+  
+  
+
+useEffect( () => {
+ console.log("currentToken updated inside the FCM Context",fcmToken)
+},[])
 
   return (
     <div className="min-h-screen bg-gray-50">
