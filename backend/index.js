@@ -19,7 +19,7 @@ import axios from 'axios';
 import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
-const AllowedOrigin = [process.env.FRONTEND_URL,'*','http://localhost:5173'];  //here
+
 // Load .env from server/ folder explicitly so running from project root still works
 const envPath = path.resolve(process.cwd(), 'server', '.env');
 const result = dotenv.config({ path: envPath });
@@ -39,6 +39,8 @@ if (!hasMongo) {
   console.error('ERROR: MONGODB_URI is not set. Please add server/.env with MONGODB_URI.');
   // we don't exit here to allow other dev flows, but it's useful to notice in logs
 }
+
+const AllowedOrigin = [process.env.FRONTEND_URL,'*','http://localhost:5173'];  //here
 
 const app = express();
 const server = http.createServer(app);
