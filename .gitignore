@@ -5,6 +5,7 @@ yarn-error.log
 
 # local env files
 backend/.env
+backend/utils/firebaseAdminSDK.json
 frontend/.env.local
 .env
 .env.local
