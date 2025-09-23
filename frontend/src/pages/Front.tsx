@@ -22,8 +22,9 @@ import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 
+// 🔹 Make prop optional so <Front /> works without passing it
 interface LocationSearchBoxProps {
-  onLocationSelect: (location: GeocodingResult) => void;
+  onLocationSelect?: (location: GeocodingResult) => void;
 }
 
 interface ParkingArea extends GeocodingResult {
@@ -107,7 +108,7 @@ const popularAreas: ParkingArea[] = [
   },
   {
     id: '6',
-    placeName: 'Robber\'s Cave',
+    placeName: "Robber's Cave",
     area: 'New Forest',
     latitude: 30.3752,
     longitude: 78.0643,
@@ -122,27 +123,11 @@ const popularAreas: ParkingArea[] = [
 ];
 
 const featuredImages = [
-  {
-    url: `${image7}`,
-    title: 'Local Markets'
-  },
-  {
-    url: `${image10}`,
-    title: 'Discover Dehradun'
-  },
-
-  {
-    url: `${image3}`,
-    title: 'Scenic Views'
-  },
-  {
-    url: `${image8}`,
-    title: 'Scenic Views'
-  },
-  {
-    url: `${image9}`,
-    title: 'Scenic Views'
-  }
+  { url: `${image7}`, title: 'Local Markets' },
+  { url: `${image10}`, title: 'Discover Dehradun' },
+  { url: `${image3}`, title: 'Scenic Views' },
+  { url: `${image8}`, title: 'Scenic Views' },
+  { url: `${image9}`, title: 'Scenic Views' }
 ];
 
 const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
@@ -150,14 +135,13 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedParking, setSelectedParking] = useState<ParkingArea | null>(null);
-    const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
-    const { viewport, setViewport } = useMapContext();
-    const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
-    const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-    const [searchRadius, setSearchRadius] = useState(5000);
-      const [isSearchOpen, setIsSearchOpen] = useState(false);
-      const navigate=useNavigate()
-    
+  const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const { viewport, setViewport } = useMapContext();
+  const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [searchRadius, setSearchRadius] = useState(5000);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const navigate = useNavigate();
 
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
@@ -167,25 +151,23 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
       toast.error('Failed to fetch parking spaces.');
     }
   };
-    useEffect(() => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            setViewport({ ...viewport, latitude, longitude });
-            setCurrentLocation({ lat: latitude, lng: longitude });
-            fetchNearbyParkingSpaces(latitude, longitude);
-       
-          },
-          (error) => {
-            console.error('Location error:', error);
-            toast.error('Could not get your location. Please enable location services.');
-          
-          }
-        );
-      }
-    }, []);
 
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          setViewport({ ...viewport, latitude, longitude });
+          setCurrentLocation({ lat: latitude, lng: longitude });
+          fetchNearbyParkingSpaces(latitude, longitude);
+        },
+        (error) => {
+          console.error('Location error:', error);
+          toast.error('Could not get your location. Please enable location services.');
+        }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     const loadInitialAreas = async () => {
@@ -224,59 +206,56 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
     } catch (error) {
       toast.error('Failed to fetch parking spaces for the selected location.');
     }
+
+    // 🔹 Call prop safely if provided
+    onLocationSelect?.(result);
   };
-    const handleGoToCurrentLocation = () => {
-      if (currentLocation) {
-        setViewport({
-          ...viewport,
-          latitude: currentLocation.lat,
-          longitude: currentLocation.lng,
-          zoom: 15, // Adjust zoom level as needed
-        });
-    
-        // Fetch nearby parking spaces for the current location
-        fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-      } else {
-        toast.info('Current location not available.');
-      }
-    };
 
-const handleParkingSelect = (area: ParkingArea) => {
-  setViewport({
-    ...viewport,
-    latitude: area.latitude,
-    longitude: area.longitude,
-    zoom: 15, // Adjust zoom level as needed
-  });
-  navigate(`/favorite?lat=${area.latitude}&lng=${area.longitude}`);
-};
+  const handleGoToCurrentLocation = () => {
+    if (currentLocation) {
+      setViewport({
+        ...viewport,
+        latitude: currentLocation.lat,
+        longitude: currentLocation.lng,
+        zoom: 15
+      });
+      fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
+    } else {
+      toast.info('Current location not available.');
+    }
+  };
 
-
+  const handleParkingSelect = (area: ParkingArea) => {
+    setViewport({
+      ...viewport,
+      latitude: area.latitude,
+      longitude: area.longitude,
+      zoom: 15
+    });
+    navigate(`/favorite?lat=${area.latitude}&lng=${area.longitude}`);
+  };
 
   return (
     <div className="w-full pb-28 mt-5 max-w-2xl mx-auto px-4 py-4">
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
-       
         <SearchBar onOpen={() => setIsSearchOpen(true)} />
       </div>
 
       {/* Search Section */}
-        <div className="absolute mt-10 top-4 left-4 right-4 z-10 ">
-              
-              {/* <LocationSearch onLocationSelect={handleLocationSelect} onGoToCurrentLocation={handleGoToCurrentLocation}/> */}
-            </div>
-            {/* <FilterBox filters={filters} onFilterChange={setFilters} /> */}
-      
-            <SearchOverlay
-              isOpen={isSearchOpen} 
-              onClose={() => setIsSearchOpen(false)} 
-            />
+      <div className="absolute mt-10 top-4 left-4 right-4 z-10 ">
+        {/* <LocationSearchBox onLocationSelect={handleLocationSelect} onGoToCurrentLocation={handleGoToCurrentLocation}/> */}
+      </div>
+
+      <SearchOverlay
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
 
       {/* Search Results */}
       {results.length > 0 && query.length > 2 && (
         <div className="absolute z-50 left-4 right-4 sm:left-auto sm:right-auto sm:w-full max-w-2xl bg-white rounded-lg shadow-lg max-h-[calc(100vh-200px)] overflow-y-auto">
-          {results.map((result:any) => (
+          {results.map((result: any) => (
             <button
               key={result.id}
               onClick={() => handleLocationSelect(result)}
@@ -297,43 +276,32 @@ const handleParkingSelect = (area: ParkingArea) => {
         <div className="mb-6">
           <h2 className="text-base font-medium text-gray-800 mb-3">Find Your Parking</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {popularAreas.map((area:any) => (
+            {popularAreas.map((area: any) => (
               <button
                 key={area.id}
                 onClick={() => handleParkingSelect(area)}
                 className="group relative overflow-hidden rounded-lg w-full aspect-[4/3]"
               >
-                {/* Background P letter */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <span className="text-[120px] font-bold text-gray-100 opacity-50 group-hover:scale-150 transition-transform duration-500">
                     P
                   </span>
                 </div>
-                
                 <img
                   src={area.imageUrl}
                   alt={area.placeName}
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent group-hover:from-red-900/70 transition-colors" />
-                
-                {/* Quick parking info on hover */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50">
                   <Car className="w-8 h-8 text-white mb-2" />
                   <p className="text-white text-lg font-bold">{area.parking.spots} spots</p>
                   <p className="text-white text-sm">₹{area.parking.hourlyRate}/hr</p>
                 </div>
-                
                 <div className="absolute bottom-0 left-0 right-0 p-2 group-hover:opacity-0 transition-opacity duration-300">
-                  <p className="text-white text-sm font-medium text-center line-clamp-1">
-                    {area.placeName}
-                  </p>
-                  <p className="text-gray-200 text-xs text-center line-clamp-1">
-                    {area.area}
-                  </p>
+                  <p className="text-white text-sm font-medium text-center line-clamp-1">{area.placeName}</p>
+                  <p className="text-gray-200 text-xs text-center line-clamp-1">{area.area}</p>
                 </div>
-                
-                {/* Parking indicator */}
                 <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full p-1">
                   <Car className="w-4 h-4 text-white" />
                 </div>
@@ -372,14 +340,10 @@ const handleParkingSelect = (area: ParkingArea) => {
                 </div>
                 <div className="flex items-center gap-2">
                   <Building className="w-5 h-5 text-red-600" />
-                  <span className="text-sm capitalize">
-                    {selectedParking.parking.type} parking
-                  </span>
+                  <span className="text-sm capitalize">{selectedParking.parking.type} parking</span>
                 </div>
                 <div className="bg-red-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-red-900">
-                    ₹{selectedParking.parking.hourlyRate}/hour
-                  </p>
+                  <p className="text-sm font-medium text-red-900">₹{selectedParking.parking.hourlyRate}/hour</p>
                 </div>
               </div>
             </div>

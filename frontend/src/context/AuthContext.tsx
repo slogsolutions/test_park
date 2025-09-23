@@ -1,12 +1,15 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { AuthState, User } from '../types/auth';
 import { authService } from '../services/auth.service';
+import axios from "axios";
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   googleLogin: (credential: string) => Promise<void>;
+  refreshUser: () => Promise<void>;
+  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -128,6 +131,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'LOGOUT' });
   };
 
+  // ✅ NEW: Manually set user in state (for immediate UI update after KYC etc.)
+  const setUser = (user: User | null) => {
+    if (user) {
+      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+    } else {
+      dispatch({ type: 'LOGOUT' });
+    }
+  };
+
+  // ✅ NEW: Fetch fresh profile from backend (used after KYC approval)
+  const refreshUser = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        dispatch({ type: 'LOGOUT' });
+        return;
+      }
+      const user = await authService.getMe();
+      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+    } catch (error) {
+      console.error("refreshUser failed", error);
+      localStorage.removeItem('token');
+      dispatch({ type: 'LOGOUT' });
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -136,6 +165,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         googleLogin,
+        refreshUser,
+        setUser,
       }}
     >
       {children}
