@@ -19,7 +19,7 @@ import axios from 'axios';
 import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
-
+const AllowedOrigin = [process.env.FRONTEND_URL,'*','http://localhost:5173'];  //here
 // Load .env from server/ folder explicitly so running from project root still works
 const envPath = path.resolve(process.cwd(), 'server', '.env');
 const result = dotenv.config({ path: envPath });
@@ -44,7 +44,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: AllowedOrigin,
     methods: ['GET', 'POST'],
   },
 });
@@ -59,10 +59,10 @@ try {
 
 // Middleware
 // Allow the specific local frontend in dev (if provided), otherwise allow all
-const frontendOrigin = process.env.FRONTEND_URL || '*';
+
 app.use(
   cors({
-    origin: frontendOrigin,
+    origin: AllowedOrigin,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS',"PATCH"],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
