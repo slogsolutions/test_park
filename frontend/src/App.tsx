@@ -1,4 +1,5 @@
 import React from "react";
+import { RoleProvider, useRole } from "./context/RoleContext";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -32,6 +33,8 @@ import Front from "./pages/Front";
 import Favorites from './pages/Favorite';
 import FindParking from "./components/search/FindParking";
 import Profile from "./pages/Profile";
+import { buyerRoutes } from "./routes/BuyerRoutes";
+import { sellerRoutes } from "./routes/SellerRoutes";
 
 export default function App() {
   return (
@@ -71,7 +74,7 @@ function HomeOrFront({ user }: { user: any }) {
 // Component for managing dynamic routes
 function AppRoutes() {
   const { user } = useAuth(); // 🔹 Get user authentication status from context
-
+  const { role } = useRole();
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
