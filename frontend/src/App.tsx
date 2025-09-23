@@ -1,5 +1,4 @@
 import React from "react";
-import { RoleProvider, useRole } from "./context/RoleContext";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -22,7 +21,7 @@ import AdminPanel from "./pages/Admin";
 import VehicleDetails from "./pages/VehicleDetails";
 import MyBookings from "./components/parking/MyBookings";
 import ProviderBookings from "./pages/ProivderBookings";
-import Page from "./pages/Page";
+// import Page from "./pages/Page";
 import AddVehicle from "./pages/AddVechicle";
 import VehicleList from "./pages/VehicleList";
 import TrackNowPage from "./components/parking/TrackNowPage";
@@ -33,15 +32,6 @@ import Front from "./pages/Front";
 import Favorites from './pages/Favorite';
 import FindParking from "./components/search/FindParking";
 import Profile from "./pages/Profile";
-import { buyerRoutes } from "./routes/BuyerRoutes";
-import { sellerRoutes } from "./routes/SellerRoutes";
-
-/**
- * Minimal App.tsx replacement:
- * - useRole() is called inside AppRoutes (which is rendered inside RoleProvider)
- * - Front is given a safe no-op onLocationSelect via HomeOrFront wrapper
- * - Buyer and Seller route arrays are injected into <Routes>
- */
 
 export default function App() {
   return (
@@ -80,15 +70,7 @@ function HomeOrFront({ user }: { user: any }) {
 
 // Component for managing dynamic routes
 function AppRoutes() {
-  const { user } = useAuth();
-
-  // Because AppRoutes is rendered inside RoleProvider (see App above),
-  // it's safe to call useRole() here.
-  const { role } = useRole();
-
-  // quick debug logs to help trace blank-screen causes — remove in production
-  // eslint-disable-next-line no-console
-  console.log("AppRoutes - user:", user, " role:", role);
+  const { user } = useAuth(); // 🔹 Get user authentication status from context
 
   return (
     <div className="min-h-screen bg-gray-50">
