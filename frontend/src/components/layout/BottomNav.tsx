@@ -38,7 +38,7 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
             className='flex flex-col items-center py-3  flex-1 transition-colors duration-200'
           >
             <LucideHome className="h-6 w-6" />
-            <span className="text-xs mt-1 font-medium">Home</span>
+            {/* <span className="text-xs mt-1 font-medium">Home</span> */}
           </button>
         {navItems.map(({ icon: Icon, label, id }) => (
           <button

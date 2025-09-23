@@ -41,7 +41,7 @@ export default function Navbar() {
             <>
               <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
                 <LucideHome className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">Home</span>
+                {/* <span className="text-xs mt-1 font-medium">Home</span> */}
               </Link>
 
               {/* ✅ Show KYC only if not approved */}
@@ -133,7 +133,7 @@ export default function Navbar() {
               <>
                 <Link to="/" className={`flex items-center space-x-1 ${getNavItemClass("/")}`}>
                   <MdHome className="h-5 w-5" />
-                  <span>Home</span>
+                  {/* <span>Home</span> */}
                 </Link>
 
                 {/* ✅ Show KYC only if not approved */}
