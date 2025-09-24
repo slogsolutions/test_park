@@ -10,21 +10,36 @@ import {
   getParkingSpaceAvailability,
 } from '../controllers/parking.js';
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
-const storage = multer.memoryStorage();
+const uploadDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `${file.fieldname}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
 const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
 
 const router = express.Router();
 
-router.post('/', protect, registerParkingSpace);
+router.post('/', protect, upload.array('photos', 5), registerParkingSpace);
 router.put('/:id', protect, upload.array('photos', 5), updateParkingSpace);
+
+// Put specific routes before the parameterized route
+router.get('/my-spaces', protect, getMyParkingSpaces);
+router.get('/:id/availability', protect, getParkingSpaceAvailability); // recommended
+router.get('/:id', getParkingSpaceById);
+
 router.delete('/:id', protect, deleteParkingSpace);
 router.get('/', getParkingSpaces);
-router.get('/my-spaces', protect, getMyParkingSpaces);
-router.get('/:id', getParkingSpaceById);
-router.get('/availability/:spaceId',protect, getParkingSpaceAvailability);
 
 export default router;

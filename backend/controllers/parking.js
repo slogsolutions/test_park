@@ -11,7 +11,7 @@ export const registerParkingSpace = async (req, res) => {
       title,
       description,
       location,
-      address,  // address will be a string from the frontend
+      address,  // will be stringified JSON from frontend
       pricePerHour,
       priceParking,
       availability,
@@ -19,62 +19,88 @@ export const registerParkingSpace = async (req, res) => {
       amenities,
     } = req.body;
 
-    // Parse the address if it's a string
+    // Parse address if sent as JSON string
     let addressParsed = address;
     if (typeof address === 'string') {
       try {
-        addressParsed = JSON.parse(address); // Parse address into an object
-      } catch (error) {
+        addressParsed = JSON.parse(address);
+      } catch (err) {
         return res.status(400).json({ message: '"address" is not valid JSON' });
       }
     }
 
-    // Parse availability
-    let availabilityParsed;
+    // Parse availability if string
+    let availabilityParsed = availability;
     if (typeof availability === 'string') {
       try {
         availabilityParsed = JSON.parse(availability);
-      } catch (error) {
+      } catch (err) {
         return res.status(400).json({ message: '"availability" is not valid JSON' });
       }
-    } else {
-      availabilityParsed = availability;
+    }
+
+    // Parse location if string
+    let locationParsed = location;
+    if (typeof location === 'string') {
+      try {
+        locationParsed = JSON.parse(location);
+      } catch (err) {
+        return res.status(400).json({ message: '"location" is not valid JSON' });
+      }
     }
 
     // Validate location
-    if (!location || !Array.isArray(location.coordinates) || location.coordinates.length !== 2) {
+    if (
+      !locationParsed ||
+      !Array.isArray(locationParsed.coordinates) ||
+      locationParsed.coordinates.length !== 2
+    ) {
       return res.status(400).json({ message: 'Invalid location coordinates' });
     }
 
-    // Skip photo processing if no files are uploaded
+    // Process uploaded photos (from multer)
     const photos = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        photos.push(file.filename); // or file.path depending on your multer config
+      }
+    }
 
-    // Create a new parking space entry
+    // Create new ParkingSpace
     const parkingSpace = new ParkingSpace({
       owner: req.user._id,
       title,
       description,
       location: {
         type: 'Point',
-        coordinates: [location.coordinates[0], location.coordinates[1]],
+        coordinates: [
+          locationParsed.coordinates[0],
+          locationParsed.coordinates[1],
+        ],
       },
-      address: addressParsed,  // Store the parsed address
+      address: addressParsed,
       pricePerHour,
       priceParking,
       availableSpots,
       availability: availabilityParsed,
       amenities,
-      photos, // This will be an empty array
+      photos,
     });
-console.log("registerd parking space details ",parkingSpace);
+
+    console.log('registered parking space details', parkingSpace);
 
     await parkingSpace.save();
-    res.status(201).json({ message: 'Parking space registered successfully!', data: parkingSpace });
+    res
+      .status(201)
+      .json({ message: 'Parking space registered successfully!', data: parkingSpace });
   } catch (error) {
     console.error('Error registering parking space:', error.message);
-    res.status(500).json({ message: 'Failed to register parking space', error: error.message });
+    res
+      .status(500)
+      .json({ message: 'Failed to register parking space', error: error.message });
   }
 };
+
 
 export const getParkingSpaceAvailability = async (req, res) => {
   const { spaceId } = req.params; // Get spaceId from URL parameters

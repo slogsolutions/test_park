@@ -10,24 +10,26 @@ import {
 } from '../controllers/booking.js';
 import User from '../models/User.js';
 const router = express.Router();
-import Razorpay from 'razorpay'
+import Razorpay from 'razorpay';
+
 const razorpayInstance = new Razorpay({
   key_id: 'rzp_test_eQoJ7XZxUf37D7', // Replace with your Razorpay key
   key_secret: 'your_razorpay_key_secret', // Replace with your Razorpay secret
 });
 
+// ✅ Booking routes
 router.post('/', protect, createBooking);
 router.get('/my-bookings', protect, getMyBookings);
 router.get('/provider-bookings', protect, getProviderBookings);
+
+// ✅ Updated status route (Accept/Reject etc.)
 router.put('/:id/status', protect, updateBookingStatus);
+
 router.get('/:id', protect, getBookingById);
-router.delete('/:bookingId',protect,deleteById);
+router.delete('/:bookingId', protect, deleteById);
 
-
-
-
-
-router.put("/:id/update-payment-status",protect, async (req, res) => {
+// ✅ Payment status update route
+router.put("/:id/update-payment-status", protect, async (req, res) => {
   const { id } = req.params;
   const { paymentStatus } = req.body;
 
@@ -50,8 +52,8 @@ router.put("/:id/update-payment-status",protect, async (req, res) => {
   }
 });
 
-// move it to user modal 
-router.post('/add-vehicle',protect, async (req, res) => {
+// ✅ Vehicle management routes
+router.post('/add-vehicle', protect, async (req, res) => {
   const { make, model, year, licensePlate, chassisNumber, registrationDate } = req.body;
   
   if (!make || !model || !year || !licensePlate) {
@@ -71,7 +73,6 @@ router.post('/add-vehicle',protect, async (req, res) => {
     res.status(200).json({ message: 'Vehicle added successfully!', vehicles: user.vehicles });
   } catch (error) {
     console.log(error);
-    
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
@@ -120,6 +121,5 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
-
 
 export default router;

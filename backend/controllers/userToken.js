@@ -60,11 +60,10 @@ import UserToken from "../models/UserToken.js";
 
 export const saveToken = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { fcmToken, deviceInfo } = req.body;
+    const { userId, fcmToken, deviceInfo } = req.body;
 
-    if (!fcmToken) {
-      return res.status(400).json({ message: "Missing fcmToken" });
+    if (!userId || !fcmToken) {
+      return res.status(400).json({ message: "Missing userId or fcmToken" });
     }
 
     const policy = process.env.FIREBASE_TOKEN_POLICY || "multiple";
@@ -72,8 +71,6 @@ export const saveToken = async (req, res) => {
     if (policy === "single") {
       // remove all previous tokens for this user
       await UserToken.deleteMany({ userId });
-
-      // create only the latest one
       await UserToken.create({ userId, token: fcmToken, deviceInfo });
     } else {
       // multiple-device behavior
@@ -89,6 +86,7 @@ export const saveToken = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 export const removeToken = async (req, res) => {
   try {
