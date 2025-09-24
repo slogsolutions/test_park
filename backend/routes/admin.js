@@ -11,94 +11,159 @@ import seeder from "../seeder.js";
 import NotificationService from "../service/NotificationService.js"; //for firebase 
 const router = express.Router();
 
-// User routes (existing) 
 
-//  old firebase admin 
 // router.post("/firebase", async (req, res) => {
 //   try {
-//     // You may want to check req.user.isAdmin here
-//     const { title, body, userId, username, deviceToken } = req.body;
-//     if (!title || !body) return res.status(400).json({ message: "Missing title/body" });
+//     const { title, body, userId, username, fullname, email, userIds, deviceToken } = req.body;
+
+//     if (!title || !body) {
+//       return res.status(400).json({ message: "Missing title/body" });
+//     }
 
 //     let tokens = [];
 
+//     // 1️⃣ Direct single device token
 //     if (deviceToken) {
 //       tokens = [deviceToken];
-//     } else if (userId) {
+//     }
+
+//     // 2️⃣ Single user by ID
+//     else if (userId) {
 //       const docs = await UserToken.find({ userId }).select("token -_id");
-//       tokens = docs.map((d) => d.token);
-//     } else if (username) {
-//       const user = await User.findOne({ username });
+//       tokens = docs.map(d => d.token);
+//     }
+
+//     // 3️⃣ Single user by username
+//     else if (username) {
+//       const user = await User.findOne({ "fullname.firstname": username });
 //       if (!user) return res.status(404).json({ message: "User not found" });
+
 //       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
-//       tokens = docs.map((d) => d.token);
-//     } else {
-//       return res.status(400).json({ message: "No target specified (deviceToken / userId / username)" });
+//       tokens = docs.map(d => d.token);
+//     }
+
+//     // 4️⃣ By full name
+//     else if (fullname) {
+//       const user = await User.findOne({
+//         "fullname.firstname": fullname.firstname,
+//         "fullname.lastname": fullname.lastname
+//       });
+//       if (!user) return res.status(404).json({ message: "User not found" });
+
+//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
+//       tokens = docs.map(d => d.token);
+//     }
+
+//     // 5️⃣ By email
+//     else if (email) {
+//       const user = await User.findOne({ email });
+//       if (!user) return res.status(404).json({ message: "User not found" });
+
+//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
+//       tokens = docs.map(d => d.token);
+//     }
+
+//     // 6️⃣ List of user IDs
+//     else if (Array.isArray(userIds) && userIds.length > 0) {
+//       const docs = await UserToken.find({ userId: { $in: userIds } }).select("token -_id");
+//       tokens = docs.map(d => d.token);
+//     }
+
+//     // No target provided
+//     else {
+//       return res.status(400).json({ message: "No target specified" });
 //     }
 
 //     if (tokens.length === 0) {
-//       return res.status(400).json({ message: "No tokens found for target" });
+//       return res.status(404).json({ message: "No tokens found for target" });
 //     }
 
-//     // Compose message (multicast)
-//     const message = {
-//       notification: { title, body },
-//       tokens,
-//     };
-
-//     const response = await admin.messaging().sendEachForMulticast(message);
-//     // Remove invalid tokens from DB
-//     if (response.failureCount > 0) {
-//       const failedTokens = [];
-//       response.responses.forEach((resp, idx) => {
-//         if (!resp.success) {
-//           failedTokens.push(tokens[idx]);
-//         }
-//       });
-//       if (failedTokens.length > 0) {
-//         await UserToken.deleteMany({ token: { $in: failedTokens }});
-//       }
+//     // ✅ Send notification
+//     let response;
+//     if (tokens.length === 1) {
+//       response = await NotificationService.sendToDevice(tokens[0], title, body);
+//     } else {
+//       response = await NotificationService.sendToMultiple(tokens, title, body);
 //     }
 
-//     return res.json({ successCount: response.successCount, failureCount: response.failureCount, response });
+//     return res.json({ success: true, tokensSent: tokens.length, response });
 //   } catch (err) {
-//     console.error("send error", err);
-//     return res.status(500).json({ message: "Failed to send" });
+//     console.error("Notification error:", err);
+//     return res.status(500).json({ message: "Failed to send notification", error: err.message });
 //   }
 // });
 
-// routes/admin.jsimport NotificationService from "../services/NotificationService.js";
-
-
 router.post("/firebase", async (req, res) => {
   try {
-    const { title, body, userId, username, deviceToken } = req.body;
+    const {
+      title,
+      body,
+      userId,
+      username,
+      fullName,
+      email,
+      userIds,
+      deviceToken,
+      allUsers
+    } = req.body;
+
     if (!title || !body) {
-      return res.status(400).json({ message: "Missing title/body" });
+      return res.status(400).json({ message: "Missing title or body" });
     }
 
     let tokens = [];
 
-    if (deviceToken) {
-      tokens = [deviceToken];
-    } else if (userId) {
-      const docs = await UserToken.find({ userId }).select("token -_id");
-      tokens = docs.map((d) => d.token);
-    } else if (username) {
-      const user = await User.findOne({ username });
-      if (!user) return res.status(404).json({ message: "User not found" });
+    const getTokensByUserId = async (id) => {
+      const docs = await UserToken.find({ userId: id }).select("token -_id");
+      return docs.map(d => d.token);
+    };
 
-      const docs = await UserToken.find({ userId: user._id }).select("token -_id");
-      tokens = docs.map((d) => d.token);
-    } else {
+    // 1️⃣ All users
+    if (allUsers) {
+      const docs = await UserToken.find({}).select("token -_id");
+      tokens = docs.map(d => d.token);
+    }
+    // 2️⃣ Direct device token
+    else if (deviceToken) {
+      tokens = [deviceToken];
+    }
+    // 3️⃣ Single user by ID
+    else if (userId) {
+      tokens = await getTokensByUserId(userId);
+    }
+    // 4️⃣ Single user by username
+    else if (username) {
+      const user = await User.findOne({ name: username });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      tokens = await getTokensByUserId(user._id);
+    }
+    // 5️⃣ By full name
+    else if (fullName) {
+      const user = await User.findOne({ "kycData.fullName": fullName });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      tokens = await getTokensByUserId(user._id);
+    }
+    // 6️⃣ By email
+    else if (email) {
+      const user = await User.findOne({ email });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      tokens = await getTokensByUserId(user._id);
+    }
+    // 7️⃣ List of user IDs
+    else if (Array.isArray(userIds) && userIds.length > 0) {
+      const docs = await UserToken.find({ userId: { $in: userIds } }).select("token -_id");
+      tokens = docs.map(d => d.token);
+    }
+    // No target provided
+    else {
       return res.status(400).json({ message: "No target specified" });
     }
 
     if (tokens.length === 0) {
-      return res.status(400).json({ message: "No tokens found for target" });
+      return res.status(404).json({ message: "No tokens found for target" });
     }
 
-    // ✅ If one token → single send, else → multicast
+    // ✅ Send notification
     let response;
     if (tokens.length === 1) {
       response = await NotificationService.sendToDevice(tokens[0], title, body);
@@ -106,12 +171,17 @@ router.post("/firebase", async (req, res) => {
       response = await NotificationService.sendToMultiple(tokens, title, body);
     }
 
-    return res.json({ success: true, response });
+    return res.json({
+      success: true,
+      tokensSent: tokens.length,
+      response
+    });
   } catch (err) {
     console.error("Notification error:", err);
-    return res.status(500).json({ message: "Failed to send notification" });
+    return res.status(500).json({ message: "Failed to send notification", error: err.message });
   }
 });
+
 
 
 router.post("/seed", async(req,res) => {

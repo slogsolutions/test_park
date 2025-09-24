@@ -121,7 +121,7 @@
 //   );
 // }
 // ---------------------------OLD --------------------------------------
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
 import { GoogleOAuthProvider } from "@react-oauth/google";
@@ -188,7 +188,9 @@ export default function App() {
 
 function HomeOrFront({ user }: { user: any }) {
   console.log("from APP.tsx user available",user);
-  useFirebaseMessaging(user); // only registers when user exists
+ useFirebaseMessaging(user); // only registers when user exists
+
+ 
 
   try {
     if (user) {
