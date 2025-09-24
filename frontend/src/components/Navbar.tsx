@@ -37,6 +37,41 @@ export default function Navbar() {
     }
   }, [isAuthenticated, refreshUser]);
 
+  // New: inject small role-based stylesheet and set data-role attribute so .home-icon can change color
+  useEffect(() => {
+    document.body.setAttribute('data-role', role);
+
+    const styleId = 'navbar-role-styles';
+    const existing = document.getElementById(styleId) as HTMLStyleElement | null;
+    const red = '#ef4444';      // tailwind red-500
+    const green = '#16a34a';    // tailwind emerald-600
+
+    const css = `
+      body[data-role="seller"] .home-icon { color: ${red} !important; }
+      body[data-role="buyer"]  .home-icon { color: ${green} !important; }
+
+      /* If the home icon is an inline SVG, ensure fill gets colored too */
+      body[data-role="seller"] .home-icon svg { fill: ${red} !important; }
+      body[data-role="buyer"]  .home-icon svg { fill: ${green} !important; }
+    `;
+
+    if (existing) {
+      existing.textContent = css;
+    } else {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.type = 'text/css';
+      style.appendChild(document.createTextNode(css));
+      document.head.appendChild(style);
+    }
+
+    return () => {
+      // keep the style but clear it; avoids removing if other components rely on it during routing
+      const s = document.getElementById(styleId);
+      if (s) s.textContent = '';
+    };
+  }, [role]);
+
   const getNavItemClass = (path: any) =>
     location.pathname === path
       ? "text-red-600 font-bold dark:text-red-400"
@@ -52,7 +87,7 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
-                <MdHome className="h-6 w-6" />
+                <MdHome className="h-6 w-6 home-icon" />
               </Link>
 
               {/* Show KYC only if not approved */}
@@ -139,7 +174,7 @@ export default function Navbar() {
             {isAuthenticated ? (
               <>
                 <Link to="/" className={`flex items-center space-x-1 ${getNavItemClass("/")}`}>
-                  <MdHome className="h-5 w-5" />
+                  <MdHome className="h-5 w-5 home-icon" />
                 </Link>
 
                 {/* Show KYC only if not approved */}
@@ -209,7 +244,7 @@ export default function Navbar() {
       className={`w-16 h-8 rounded-full transition-colors duration-300 ease-out
         ${role === 'seller'
           ? 'bg-gradient-to-r from-pink-500 to-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.18)]'
-          : 'bg-gradient-to-r from-slate-200 to-slate-300 dark:from-gray-700 dark:to-gray-600'
+          : 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_8px_24px_rgba(16,185,129,0.12)]'
         }`}
       role="presentation"
     />
@@ -226,7 +261,7 @@ export default function Navbar() {
       {/* fancy micro-icon + subtle pulsing when active */}
       <span
         className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition-transform duration-300
-          ${role === 'seller' ? 'bg-red-50 text-red-600 animate-pulse-slow' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-200'}`}
+          ${role === 'seller' ? 'bg-red-50 text-red-600 animate-pulse-slow' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-300'}`}
       >
         {/* switch icon: shop for seller, user/bookmark for buyer */}
         {role === 'seller' ? (
@@ -244,8 +279,8 @@ export default function Navbar() {
     {/* hover glow overlay (purely decorative) */}
     <div
       className={`pointer-events-none absolute inset-0 rounded-full transition-opacity duration-300
-        ${role === 'seller' ? 'opacity-60' : 'opacity-0'}`}
-      style={{ background: 'radial-gradient(circle at 20% 50%, rgba(255,99,132,0.08), transparent 30%)' }}
+        ${role === 'seller' ? 'opacity-60' : 'opacity-60'}`}
+      style={{ background: role === 'seller' ? 'radial-gradient(circle at 20% 50%, rgba(255,99,132,0.08), transparent 30%)' : 'radial-gradient(circle at 20% 50%, rgba(16,185,129,0.08), transparent 30%)' }}
       aria-hidden="true"
     />
   </div>
