@@ -41,7 +41,7 @@ export default function Navbar() {
             <>
               <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
                 <LucideHome className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">Home</span>
+                {/* <span className="text-xs mt-1 font-medium">Home</span> */}
               </Link>
 
               {/* ✅ Show KYC only if not approved */}
@@ -133,7 +133,7 @@ export default function Navbar() {
               <>
                 <Link to="/" className={`flex items-center space-x-1 ${getNavItemClass("/")}`}>
                   <MdHome className="h-5 w-5" />
-                  <span>Home</span>
+                  {/* <span>Home</span> */}
                 </Link>
 
                 {/* ✅ Show KYC only if not approved */}
@@ -174,15 +174,28 @@ export default function Navbar() {
                   <span>Logout</span>
                 </button>
 
-                <button
-                  onClick={toggleRole}
-                  className="px-3 py-1 rounded-full text-sm font-medium 
-                            bg-gray-100 text-gray-800 hover:bg-gray-200 
-                            dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 
-                            transition-colors"
-                >
-                  Switch to {role === "buyer" ? "Seller" : "Buyer"}
-                </button>
+               <label className="inline-flex items-center cursor-pointer">
+  <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+    Buyer
+  </span>
+  <div className="relative">
+    <input
+      type="checkbox"
+      className="sr-only"
+      checked={role === "seller"}
+      onChange={toggleRole}
+    />
+    <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full shadow-inner transition-colors peer-checked:bg-red-600"></div>
+    <div
+      className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+        role === "seller" ? "translate-x-5" : ""
+      }`}
+    ></div>
+  </div>
+  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+    Seller
+  </span>
+</label>
               </>
             ) : (
               <>
