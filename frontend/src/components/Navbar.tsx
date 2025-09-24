@@ -183,28 +183,86 @@ export default function Navbar() {
                   <span>Logout</span>
                 </button>
 
-                <label className="inline-flex items-center cursor-pointer">
-                  <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Buyer
-                  </span>
-                  <div className="relative">
-                    <input
-                      type="checkbox"
-                      className="sr-only"
-                      checked={role === "seller"}
-                      onChange={toggleRole}
-                    />
-                    <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full shadow-inner transition-colors peer-checked:bg-red-600"></div>
-                    <div
-                      className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                        role === "seller" ? "translate-x-5" : ""
-                      }`}
-                    ></div>
-                  </div>
-                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Seller
-                  </span>
-                </label>
+{/* ---------- BEAUTIFUL ROLE TOGGLE (replace existing label block) ---------- */}
+<label
+  className="inline-flex items-center gap-3 select-none"
+  aria-label="Toggle role between Buyer and Seller"
+  title={`Switch to ${role === 'seller' ? 'Buyer' : 'Seller'}`}
+>
+  {/* Left label */}
+  <span className={`text-sm font-semibold transition-colors duration-250 ${
+    role === 'seller' ? 'text-gray-400' : 'text-gray-900 dark:text-gray-100'
+  }`}>Buyer</span>
+
+  <div className="relative">
+    {/* real (visually hidden) checkbox for accessibility */}
+    <input
+      type="checkbox"
+      className="sr-only"
+      checked={role === 'seller'}
+      onChange={toggleRole}
+      aria-checked={role === 'seller'}
+    />
+
+    {/* track */}
+    <div
+      className={`w-16 h-8 rounded-full transition-colors duration-300 ease-out
+        ${role === 'seller'
+          ? 'bg-gradient-to-r from-pink-500 to-red-600 shadow-[0_8px_24px_rgba(239,68,68,0.18)]'
+          : 'bg-gradient-to-r from-slate-200 to-slate-300 dark:from-gray-700 dark:to-gray-600'
+        }`}
+      role="presentation"
+    />
+
+    {/* moving knob */}
+    <div
+      className={`absolute top-0 left-0 w-8 h-8 transform rounded-full bg-white dark:bg-gray-900
+        shadow-lg transition-all duration-400 ease-out flex items-center justify-center
+        ${role === 'seller' ? 'translate-x-8 scale-105' : 'translate-x-0'}
+        `}
+      style={{ willChange: 'transform' }}
+      aria-hidden="true"
+    >
+      {/* fancy micro-icon + subtle pulsing when active */}
+      <span
+        className={`inline-flex items-center justify-center w-5 h-5 rounded-full transition-transform duration-300
+          ${role === 'seller' ? 'bg-red-50 text-red-600 animate-pulse-slow' : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-200'}`}
+      >
+        {/* switch icon: shop for seller, user/bookmark for buyer */}
+        {role === 'seller' ? (
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M3 7l9-5 9 5v2H3V7zm1 4h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z" />
+          </svg>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+            <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z" />
+          </svg>
+        )}
+      </span>
+    </div>
+
+    {/* hover glow overlay (purely decorative) */}
+    <div
+      className={`pointer-events-none absolute inset-0 rounded-full transition-opacity duration-300
+        ${role === 'seller' ? 'opacity-60' : 'opacity-0'}`}
+      style={{ background: 'radial-gradient(circle at 20% 50%, rgba(255,99,132,0.08), transparent 30%)' }}
+      aria-hidden="true"
+    />
+  </div>
+
+  {/* Right label */}
+  <span className={`text-sm font-semibold transition-colors duration-250 ${
+    role === 'seller' ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'
+  }`}>Seller</span>
+</label>
+
+{/*
+  Tailwind helper animation: add this to your tailwind config `animation` or inline via existing classes.
+  If you don't have a custom 'animate-pulse-slow', you can quickly add:
+  In global CSS (if allowed) or tailwind config -> animation: { 'pulse-slow': 'pulse 2.2s cubic-bezier(...) infinite' }
+  As fallback, the icon will still show / not break if that animation isn't defined.
+*/}
+
               </>
             ) : (
               <>
