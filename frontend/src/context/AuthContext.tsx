@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { AuthState, User } from '../types/auth';
 import { authService } from '../services/auth.service';
 import axios from "axios";
+import api from '../utils/api';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -126,7 +127,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
+  const logout = async() => {
+    const token = localStorage.getItem("fcm_token");
+if (token) {
+  await api.delete("/users/remove-token", { data: { fcmToken: token }} as any);
+  localStorage.removeItem("fcm_token");
+}
     localStorage.removeItem('token');
     dispatch({ type: 'LOGOUT' });
   };

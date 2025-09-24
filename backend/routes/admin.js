@@ -1,4 +1,8 @@
 import express from "express";
+import dotenv from "dotenv";
+dotenv.config({ path: "./.env" });
+import admin from "../utils/firebase.js";
+import UserToken from "../models/UserToken.js";
 import { protect, adminOnly } from "../middleware/auth.js";
 import User from "../models/User.js";
 import Booking from "../models/Booking.js";
@@ -8,19 +12,106 @@ import NotificationService from "../service/NotificationService.js"; //for fireb
 const router = express.Router();
 
 // User routes (existing) 
-router.post("/firebase",async(req,res) => {
-   try{
-    const {title , deviceToken , body} = req.body;
-    await NotificationService.sendNotification(deviceToken,title,body);
-    res.status(200).json({message : "Notification sent successfully",success: true});
 
-   }
-   catch(err){
-    console.log("error occured in sending notification");
-    res.status(500).json({error : err.message ,success :false});
-   }
-})
+//  old firebase admin 
+// router.post("/firebase", async (req, res) => {
+//   try {
+//     // You may want to check req.user.isAdmin here
+//     const { title, body, userId, username, deviceToken } = req.body;
+//     if (!title || !body) return res.status(400).json({ message: "Missing title/body" });
 
+//     let tokens = [];
+
+//     if (deviceToken) {
+//       tokens = [deviceToken];
+//     } else if (userId) {
+//       const docs = await UserToken.find({ userId }).select("token -_id");
+//       tokens = docs.map((d) => d.token);
+//     } else if (username) {
+//       const user = await User.findOne({ username });
+//       if (!user) return res.status(404).json({ message: "User not found" });
+//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
+//       tokens = docs.map((d) => d.token);
+//     } else {
+//       return res.status(400).json({ message: "No target specified (deviceToken / userId / username)" });
+//     }
+
+//     if (tokens.length === 0) {
+//       return res.status(400).json({ message: "No tokens found for target" });
+//     }
+
+//     // Compose message (multicast)
+//     const message = {
+//       notification: { title, body },
+//       tokens,
+//     };
+
+//     const response = await admin.messaging().sendEachForMulticast(message);
+//     // Remove invalid tokens from DB
+//     if (response.failureCount > 0) {
+//       const failedTokens = [];
+//       response.responses.forEach((resp, idx) => {
+//         if (!resp.success) {
+//           failedTokens.push(tokens[idx]);
+//         }
+//       });
+//       if (failedTokens.length > 0) {
+//         await UserToken.deleteMany({ token: { $in: failedTokens }});
+//       }
+//     }
+
+//     return res.json({ successCount: response.successCount, failureCount: response.failureCount, response });
+//   } catch (err) {
+//     console.error("send error", err);
+//     return res.status(500).json({ message: "Failed to send" });
+//   }
+// });
+
+// routes/admin.jsimport NotificationService from "../services/NotificationService.js";
+
+
+router.post("/firebase", async (req, res) => {
+  try {
+    const { title, body, userId, username, deviceToken } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ message: "Missing title/body" });
+    }
+
+    let tokens = [];
+
+    if (deviceToken) {
+      tokens = [deviceToken];
+    } else if (userId) {
+      const docs = await UserToken.find({ userId }).select("token -_id");
+      tokens = docs.map((d) => d.token);
+    } else if (username) {
+      const user = await User.findOne({ username });
+      if (!user) return res.status(404).json({ message: "User not found" });
+
+      const docs = await UserToken.find({ userId: user._id }).select("token -_id");
+      tokens = docs.map((d) => d.token);
+    } else {
+      return res.status(400).json({ message: "No target specified" });
+    }
+
+    if (tokens.length === 0) {
+      return res.status(400).json({ message: "No tokens found for target" });
+    }
+
+    // ✅ If one token → single send, else → multicast
+    let response;
+    if (tokens.length === 1) {
+      response = await NotificationService.sendToDevice(tokens[0], title, body);
+    } else {
+      response = await NotificationService.sendToMultiple(tokens, title, body);
+    }
+
+    return res.json({ success: true, response });
+  } catch (err) {
+    console.error("Notification error:", err);
+    return res.status(500).json({ message: "Failed to send notification" });
+  }
+});
 
 
 router.post("/seed", async(req,res) => {
