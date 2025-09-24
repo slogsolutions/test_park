@@ -9,7 +9,7 @@ export const useFirebaseMessaging = (user: any) => {
   const listenerSet = useRef(false);
 
   useEffect(() => {
-    if (!user?.id || !user?.token) return;
+    if (!user.isVerified) return;
 
     let unsubscribe: (() => void) | null = null;
 
