@@ -6,7 +6,7 @@ import { io } from 'socket.io-client';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
-import ProviderBookings from './pages/ProivderBookings';
+import Requests from './pages/Requests';
 import LoadingScreen from './pages/LoadingScreen';
 import { Provider, Booking } from './types';
 import { ProviderDashboard } from './components/dashboard/Deatils';
@@ -138,12 +138,11 @@ function Dash() {
 
           {currentPage === 'requests' && (
             <div className="p-6 max-w-7xl mx-auto">
-              <BookingManagement bookings={bookings} />
+              <Requests />
             </div>
           )}
 
-          {currentPage === 'bookings' && <ProviderBookings />}
-          {currentPage === 'ProviderDash' && <ProviderDashboard />}
+                    {currentPage === 'ProviderDash' && <ProviderDashboard />}
           {currentPage === 'BookedSlots' && <BookedSlots bookings={bookings} />}
           {currentPage === 'Profile' && <Profile />}
         </main>
