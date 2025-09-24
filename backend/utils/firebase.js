@@ -17,6 +17,7 @@ const serviceAccount = {
   auth_provider_x509_cert_url: process.env.FIREBASE_AUTH_PROVIDER,
   client_x509_cert_url: process.env.FIREBASE_CLIENT_CERT_URL,
   universe_domain: process.env.FIREBASE_UNIVERSE_DOMAIN,
+  TOKEN_POLICY : process.env.FIREBASE_TOKEN_POLICY
 };
 
 if (!admin.apps.length) {

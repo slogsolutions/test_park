@@ -33,7 +33,7 @@ export default function KYC() {
   });
   const [otpVerified, setOtpVerified] = useState(false);
   const navigate = useNavigate();
-  const { user, refreshUser } = useAuth(); // <- use refreshUser from context
+  const { user, refreshUser } = useAuth();
   const totalSteps = 3;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -44,37 +44,85 @@ export default function KYC() {
     }));
   };
 
+  // If the global user becomes approved at any time, redirect to register-parking
   useEffect(() => {
-    const fetchKycStatus = async () => {
-      try {
-        setLoadingKycStatus(true);
-        const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/kyc/status`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
+    if (user?.kycStatus === 'approved') {
+      navigate('/register-parking');
+    }
+  }, [user, navigate]);
 
-        if (!response.ok) throw new Error('Failed to fetch KYC status');
+  // fetchKycStatus defined outside effect so we can call it after refreshUser
+  const fetchKycStatus = async () => {
+    try {
+      setLoadingKycStatus(true);
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/kyc/status`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
 
-        const data = await response.json();
-        console.log("Fetched KYC Status:", data); // Debugging Log
-        setKycStatus(data.status);
+      if (!response.ok) throw new Error('Failed to fetch KYC status');
 
-        if (data.status === 'submitted') {
-          setState((prev) => ({ ...prev, success: true, step: totalSteps }));
-        } else if (data.status === 'approved') {
-          setState((prev) => ({ ...prev, success: true, step: totalSteps + 1 }));
+      const data = await response.json();
+      // debug
+      console.log("Fetched KYC Status:", data);
+      setKycStatus(data.status);
+
+      if (data.status === 'submitted') {
+        setState((prev) => ({ ...prev, success: true, step: totalSteps }));
+      } else if (data.status === 'approved') {
+        setState((prev) => ({ ...prev, success: true, step: totalSteps + 1 }));
+
+        // refresh global user so navbar & other screens get updated kycStatus immediately
+        try {
+          await refreshUser();
+        } catch (refreshErr) {
+          // log but do not block navigation
+          // eslint-disable-next-line no-console
+          console.warn('refreshUser failed after KYC status fetch:', refreshErr);
         }
-      } catch (error) {
-        console.error(error);
-        setState((prev) => ({ ...prev, error: 'Failed to fetch KYC status' }));
-      } finally {
-        setLoadingKycStatus(false);
+
+        // Navigate to register immediately
+        navigate('/register-parking');
+      }
+    } catch (error) {
+      console.error(error);
+      setState((prev) => ({ ...prev, error: 'Failed to fetch KYC status' }));
+    } finally {
+      setLoadingKycStatus(false);
+    }
+  };
+
+  // On mount: first refresh the global user (in case login just happened),
+  // then fetch the KYC status. The separate user-based effect above will also redirect
+  // if refreshUser loaded an approved user.
+  useEffect(() => {
+    let mounted = true;
+    const init = async () => {
+      try {
+        // Try to refresh global user so UI reflects latest server state immediately
+        await refreshUser();
+      } catch (err) {
+        // not fatal; we still proceed to fetch KYC status
+        // eslint-disable-next-line no-console
+        console.warn('refreshUser failed on KYC mount:', err);
+      }
+
+      // If after refresh the user is already approved, the other effect will redirect.
+      // Still fetch the KYC status for local UI state and fallback navigation.
+      if (mounted) {
+        await fetchKycStatus();
       }
     };
 
-    fetchKycStatus();
+    init();
+
+    return () => {
+      mounted = false;
+    };
+    // we intentionally run this only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,29 +144,30 @@ export default function KYC() {
         body: JSON.stringify({ ...formData, kycStatus: 'approved' }),
       });
 
-      const data = await response.json(); // await json to get actual response body
+      const data = await response.json();
       console.log('KYC submit response:', data);
 
       if (!response.ok) {
-        // If backend returned an error message, prefer that
         const msg = data?.message || 'Failed to submit KYC';
         throw new Error(msg);
       }
 
-      // Update local kycStatus so the page shows the approved UI immediately
+      // Update local kycStatus for immediate UI feedback
       setKycStatus(data.status || 'approved');
 
-      // Refresh global user so navbar & other screens get updated kycStatus
+      // refresh global user so navbar & other screens get updated kycStatus
       try {
         await refreshUser();
       } catch (refreshErr) {
-        // refresh failure should not block the flow, log for debugging
+        // log but do not block the flow
         // eslint-disable-next-line no-console
         console.warn('refreshUser failed after KYC submit:', refreshErr);
       }
 
       toast.success('KYC submitted successfully!');
-      navigate('/dashboard'); // Redirect to dashboard or any relevant page
+
+      // Navigate directly to register-parking so provider can register location immediately
+      navigate('/register-parking');
     } catch (error: any) {
       setState((prev) => ({
         ...prev,

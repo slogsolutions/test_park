@@ -22,13 +22,6 @@ export function Dashboard({ provider, bookings }: DashboardProps) {
 
   const stats = [
     {
-      title: 'Total Bookings',
-      value: totalBookings,
-      icon: UserCheck,
-      change: '+12.5%',
-      color: 'bg-primary-500',
-    },
-    {
       title: 'Total Earnings',
       value: totalEarnings,
       icon: HandCoins,

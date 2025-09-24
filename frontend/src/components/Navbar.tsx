@@ -6,7 +6,6 @@ import {
   User,
   Calendar,
   FileCheck,
-  LucideHome,
   LayoutDashboard,
 } from "lucide-react";
 import { MdCalendarMonth, MdDashboard, MdHome, MdMap, MdPerson } from "react-icons/md";
@@ -14,7 +13,8 @@ import logo from '../../public/Park_your_Vehicle_log.png?url';
 import { useRole } from "../context/RoleContext";
 
 export default function Navbar() {
-  const { isAuthenticated, logout, user } = useAuth();
+  // NOTE: we now request refreshUser so Navbar always shows up-to-date kycStatus
+  const { isAuthenticated, logout, user, refreshUser } = useAuth();
   const { role, toggleRole } = useRole();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const location = useLocation();
@@ -25,12 +25,24 @@ export default function Navbar() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  // When the user becomes authenticated (or on mount if already authenticated),
+  // refresh the global user object so kycStatus is current and Navbar updates immediately.
+  useEffect(() => {
+    if (isAuthenticated && typeof refreshUser === 'function') {
+      // fire-and-forget; we don't need to await, but handle errors gracefully
+      refreshUser().catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('Navbar: refreshUser failed', err);
+      });
+    }
+  }, [isAuthenticated, refreshUser]);
+
   const getNavItemClass = (path: any) =>
     location.pathname === path
       ? "text-red-600 font-bold dark:text-red-400"
       : "text-gray-700 dark:text-gray-300";
 
-  // ✅ Only show KYC link if not already submitted/approved
+  // Only show KYC link if not already submitted/approved
   const shouldShowKYC = user?.kycStatus !== "submitted" && user?.kycStatus !== "approved";
 
   if (isMobile) {
@@ -40,11 +52,10 @@ export default function Navbar() {
           {isAuthenticated ? (
             <>
               <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
-                <LucideHome className="h-6 w-6" />
-                {/* <span className="text-xs mt-1 font-medium">Home</span> */}
+                <MdHome className="h-6 w-6" />
               </Link>
 
-              {/* ✅ Show KYC only if not approved */}
+              {/* Show KYC only if not approved */}
               {shouldShowKYC && (
                 <Link to="/kyc" className={`flex flex-col items-center ${getNavItemClass("/kyc")}`}>
                   <FileCheck className="h-6 w-6" />
@@ -52,7 +63,7 @@ export default function Navbar() {
                 </Link>
               )}
 
-              {/* ✅ Register Space only visible for sellers AFTER KYC is approved */}
+              {/* Register Space only visible for sellers AFTER KYC is approved */}
               {!shouldShowKYC && role === "seller" && (
                 <Link to="/register-parking" className={`flex flex-col items-center ${getNavItemClass("/register-parking")}`}>
                   <MdMap className="h-6 w-6" />
@@ -60,15 +71,11 @@ export default function Navbar() {
                 </Link>
               )}
 
-              {role === "buyer" ? (
+              {/* Bookings link - only for buyers */}
+              {role === "buyer" && (
                 <Link to="/bookings" className={`flex flex-col items-center ${getNavItemClass("/bookings")}`}>
                   <Calendar className="h-6 w-6" />
                   <span className="text-xs mt-1 font-medium">My Bookings</span>
-                </Link>
-              ) : (
-                <Link to="/parkingprovider" className={`flex flex-col items-center ${getNavItemClass("/parkingprovider")}`}>
-                  <Calendar className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">Bookings</span>
                 </Link>
               )}
 
@@ -133,10 +140,9 @@ export default function Navbar() {
               <>
                 <Link to="/" className={`flex items-center space-x-1 ${getNavItemClass("/")}`}>
                   <MdHome className="h-5 w-5" />
-                  {/* <span>Home</span> */}
                 </Link>
 
-                {/* ✅ Show KYC only if not approved */}
+                {/* Show KYC only if not approved */}
                 {shouldShowKYC && (
                   <Link to="/kyc" className={`flex items-center space-x-1 ${getNavItemClass("/kyc")}`}>
                     <FileCheck className="h-5 w-5" />
@@ -144,7 +150,7 @@ export default function Navbar() {
                   </Link>
                 )}
 
-                {/* ✅ Register Space only visible for sellers AFTER KYC is approved */}
+                {/* Register Space only visible for sellers AFTER KYC is approved */}
                 {!shouldShowKYC && role === "seller" && (
                   <Link to="/register-parking" className={`flex items-center space-x-1 ${getNavItemClass("/register-parking")}`}>
                     <MdMap className="h-5 w-5" />
@@ -152,10 +158,13 @@ export default function Navbar() {
                   </Link>
                 )}
 
-                <Link to={role === "buyer" ? "/bookings" : "/parkingprovider"} className={`flex items-center space-x-1 ${getNavItemClass(role === "buyer" ? "/bookings" : "/parkingprovider")}`}>
-                  <MdCalendarMonth className="h-5 w-5" />
-                  <span>{role === "buyer" ? "My Bookings" : "Bookings"}</span>
-                </Link>
+                {/* Bookings link - only for buyers */}
+                {role === "buyer" && (
+                  <Link to="/bookings" className={`flex items-center space-x-1 ${getNavItemClass("/bookings")}`}>
+                    <MdCalendarMonth className="h-5 w-5" />
+                    <span>My Bookings</span>
+                  </Link>
+                )}
 
                 {role === "seller" && (
                   <Link to="/dashboard" className={`flex items-center space-x-1 ${getNavItemClass("/dashboard")}`}>
@@ -174,28 +183,28 @@ export default function Navbar() {
                   <span>Logout</span>
                 </button>
 
-               <label className="inline-flex items-center cursor-pointer">
-  <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-    Buyer
-  </span>
-  <div className="relative">
-    <input
-      type="checkbox"
-      className="sr-only"
-      checked={role === "seller"}
-      onChange={toggleRole}
-    />
-    <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full shadow-inner transition-colors peer-checked:bg-red-600"></div>
-    <div
-      className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-        role === "seller" ? "translate-x-5" : ""
-      }`}
-    ></div>
-  </div>
-  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-    Seller
-  </span>
-</label>
+                <label className="inline-flex items-center cursor-pointer">
+                  <span className="mr-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Buyer
+                  </span>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={role === "seller"}
+                      onChange={toggleRole}
+                    />
+                    <div className="w-11 h-6 bg-gray-200 dark:bg-gray-700 rounded-full shadow-inner transition-colors peer-checked:bg-red-600"></div>
+                    <div
+                      className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                        role === "seller" ? "translate-x-5" : ""
+                      }`}
+                    ></div>
+                  </div>
+                  <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Seller
+                  </span>
+                </label>
               </>
             ) : (
               <>
