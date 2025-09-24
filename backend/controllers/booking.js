@@ -197,29 +197,27 @@ export const updateBookingStatus = async (req, res) => {
   try {
     console.log("Received PUT request at:", req.originalUrl);
     const { status } = req.body;
+    const bookingId = req.params.id;
 
     // Validate status
     const allowedStatuses = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled'];
 
     if (!allowedStatuses.includes(status)) {
       console.log("invalid status");
-      
       return res.status(400).json({ message: 'Invalid status' });
     }
 
-    const booking = await Booking.findById(req.params.id);
-    console.log(booking);
-    
+    const booking = await Booking.findById(bookingId);
+    console.log('Found booking:', booking);
+
     if (!booking) {
-      console.log("no boking found");
-      
+      console.log("no booking found");
       return res.status(404).json({ message: 'Booking not found' });
     }
 
     const parkingSpace = await ParkingSpace.findById(booking.parkingSpace);
     if (!parkingSpace) {
       console.log("no Parking space found");
-
       return res.status(404).json({ message: 'Parking space not found' });
     }
 
@@ -229,23 +227,68 @@ export const updateBookingStatus = async (req, res) => {
 
     if (!isOwner && !isBookingUser) {
       console.log("not authorized to update status");
-      
       return res.status(403).json({ message: 'Not authorized to update status' });
+    }
+
+    // If status is already same, return early (optional)
+    if (booking.status === status) {
+      return res.status(200).json({ message: 'Status unchanged', booking });
     }
 
     // Update and save status
     booking.status = status;
     await booking.save();
 
+    // If booking was rejected/cancelled, free the slot in parkingSpace availability
+    if (['rejected', 'cancelled'].includes(status)) {
+      try {
+        // Match the date (midnight) and the exact slot times to unset isBooked
+        const startDateMidnight = new Date(booking.startTime);
+        startDateMidnight.setHours(0, 0, 0, 0);
+
+        const startTime = new Date(booking.startTime);
+        const endTime = new Date(booking.endTime);
+
+        const updatedParkingSpace = await ParkingSpace.findByIdAndUpdate(
+          parkingSpace._id,
+          {
+            $set: {
+              'availability.$[dateElem].slots.$[slotElem].isBooked': false,
+            },
+          },
+          {
+            arrayFilters: [
+              { 'dateElem.date': { $eq: startDateMidnight } },
+              { 'slotElem.startTime': startTime, 'slotElem.endTime': endTime },
+            ],
+            new: true,
+          }
+        );
+
+        if (!updatedParkingSpace) {
+          // Not a fatal error for booking status update, but log so you can debug
+          console.warn('Failed to update parking space availability for booking', bookingId);
+        } else {
+          console.log('Freed slot for booking:', bookingId);
+        }
+      } catch (err) {
+        console.error('Error freeing parking slot after rejection/cancel:', err);
+        // don't revert booking status — just warn
+      }
+    }
+
+    // Return the updated booking as JSON
+    const freshBooking = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
     res.status(200).json({
       message: 'Booking status updated successfully',
-      booking,
+      booking: freshBooking,
     });
   } catch (error) {
     console.error('Error updating booking status:', error);
     res.status(500).json({ message: 'Failed to update booking status' });
   }
 };
+
 
 export const getBookingById = async (req, res) => {
   try {

@@ -134,7 +134,6 @@ const MyBookings: React.FC = () => {
     }
   };
 
-
   if (loading) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
@@ -174,9 +173,26 @@ const MyBookings: React.FC = () => {
                   <span>{new Date(booking.endTime).toLocaleString()}</span>
                 </li>
                 <li className="flex items-center">
-                  <FaCheckCircle className="mr-2 text-green-500" />
-                  <span>Status: </span>
-                  <span>{booking.status}</span>
+                  {/* ✅ Status with clear icon & color */}
+                  {booking.status === "accepted" ? (
+                    <>
+                      <FaCheckCircle className="mr-2 text-green-500" />
+                      <span>Status: </span>
+                      <span className="text-green-600 font-semibold">Approved</span>
+                    </>
+                  ) : booking.status === "rejected" ? (
+                    <>
+                      <FaTimesCircle className="mr-2 text-red-500" />
+                      <span>Status: </span>
+                      <span className="text-red-600 font-semibold">Rejected</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaCheckCircle className="mr-2 text-yellow-500" />
+                      <span>Status: </span>
+                      <span className="text-yellow-600 font-semibold">Pending</span>
+                    </>
+                  )}
                 </li>
                 <li className="flex items-center">
                   <FaMoneyBillWave className="mr-2 text-green-600" />
