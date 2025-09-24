@@ -20,22 +20,26 @@ console.log("2  inside hook after check user")
         const token = await getToken(messaging, {
           vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
         });
+        console.log("3 Your Token",token)
         if (!token) return;
 
         const storageKey = `fcm_token_${user._id}`;
         const savedToken = localStorage.getItem(storageKey);
 
         if (token !== savedToken) {
+        
           setFcmToken(token);
           localStorage.setItem(storageKey, token);
 
           // ✅ Send to backend with user._id
+             console.log("4 Your not saved so sended to save to backend")
           await api.post("/users/save-token", {
             userId: user._id,
             fcmToken: token,
             deviceInfo: navigator.userAgent,
           });
         } else {
+             console.log("5 Entered Else in Hook")
           setFcmToken(savedToken);
         }
       } catch (err) {
