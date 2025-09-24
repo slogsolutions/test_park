@@ -13,7 +13,8 @@ import logo from '../../public/Park_your_Vehicle_log.png?url';
 import { useRole } from "../context/RoleContext";
 
 export default function Navbar() {
-  const { isAuthenticated, logout, user } = useAuth();
+  // NOTE: we now request refreshUser so Navbar always shows up-to-date kycStatus
+  const { isAuthenticated, logout, user, refreshUser } = useAuth();
   const { role, toggleRole } = useRole();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const location = useLocation();
@@ -23,6 +24,18 @@ export default function Navbar() {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  // When the user becomes authenticated (or on mount if already authenticated),
+  // refresh the global user object so kycStatus is current and Navbar updates immediately.
+  useEffect(() => {
+    if (isAuthenticated && typeof refreshUser === 'function') {
+      // fire-and-forget; we don't need to await, but handle errors gracefully
+      refreshUser().catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn('Navbar: refreshUser failed', err);
+      });
+    }
+  }, [isAuthenticated, refreshUser]);
 
   const getNavItemClass = (path: any) =>
     location.pathname === path
