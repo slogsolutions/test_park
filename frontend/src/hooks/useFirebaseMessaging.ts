@@ -9,10 +9,9 @@ export const useFirebaseMessaging = (user: any) => {
   const listenerSet = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
-
-    let unsubscribe: (() => void) | null = null;
-
+    console.log("1 inside hook")
+    if (!user || !user._id) return; // only run if user exists
+console.log("2  inside hook after check user")
     const requestPermissionAndToken = async () => {
       try {
         const permission = await Notification.requestPermission();
@@ -23,18 +22,19 @@ export const useFirebaseMessaging = (user: any) => {
         });
         if (!token) return;
 
-        const userTokensKey = `fcm_tokens_${user.id}`;
-        const savedToken = localStorage.getItem(userTokensKey);
+        const storageKey = `fcm_token_${user._id}`;
+        const savedToken = localStorage.getItem(storageKey);
 
         if (token !== savedToken) {
           setFcmToken(token);
-          localStorage.setItem(userTokensKey, token);
+          localStorage.setItem(storageKey, token);
 
-          await api.post(
-            "/users/save-token",
-            { fcmToken: token, deviceInfo: navigator.userAgent },
-            { headers: { Authorization: `Bearer ${user.token}` } }
-          );
+          // ✅ Send to backend with user._id
+          await api.post("/users/save-token", {
+            userId: user._id,
+            fcmToken: token,
+            deviceInfo: navigator.userAgent,
+          });
         } else {
           setFcmToken(savedToken);
         }
@@ -43,8 +43,9 @@ export const useFirebaseMessaging = (user: any) => {
       }
     };
 
+    // Set up message listener only once
     if (!listenerSet.current) {
-      unsubscribe = onMessage(messaging, (payload) => {
+      onMessage(messaging, (payload) => {
         toast.info(
           `${payload.notification?.title || "Notification"}: ${
             payload.notification?.body || ""
@@ -56,14 +57,7 @@ export const useFirebaseMessaging = (user: any) => {
     }
 
     requestPermissionAndToken();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-        listenerSet.current = false;
-      }
-    };
-  }, [user?.id, user?.token]);
+  }, [user?._id]);
 
   return fcmToken;
 };
