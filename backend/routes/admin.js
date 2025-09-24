@@ -1,7 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
-import admin from "../utils/firebase.js";
+// import admin from "../utils/firebase.js";
 import UserToken from "../models/UserToken.js";
 import { protect, adminOnly } from "../middleware/auth.js";
 import User from "../models/User.js";
