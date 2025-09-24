@@ -76,7 +76,10 @@ app.use("/api/users", userTokensRouter);
 app.use('/api/auth', authRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/parking', parkingRoutes);
+// Keep the original mount for backwards-compatibility
 app.use('/api/booking', bookingRoutes);
+// ALSO mount with plural to match examples / frontend that may call /api/bookings
+app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use("/api/admin", adminRoutes);
 
@@ -201,7 +204,7 @@ app.post('/proxy/validate-RC', async (req, res) => {
   try {
     if (!process.env.CLIENT_ID || !process.env.CLIENT_SECRET) {
       console.error('Decentro credentials missing in environment');
-      return res.status(500).json({ message: 'Server misconfiguration: Decentro credentials missing' });
+      return res.status(500).json({ message: 'Decentro credentials missing' });
     }
 
     const payload = {

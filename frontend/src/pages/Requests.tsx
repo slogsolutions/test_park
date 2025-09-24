@@ -86,17 +86,34 @@ const ProviderBookings = () => {
     }
   };
 
+  // ✅ Modified to use same /status route instead of non-existent /reject/:id
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
-      await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/reject/${bookingId}`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'rejected', reason }),
       });
+
+      if (!response.ok) {
+        const error = await response.json();
+        alert(`Error: ${error.message}`);
+        return;
+      }
+
       // Update local state robustly: check both _id and id
-      setBookings(prev => prev.map(booking => (booking._id === bookingId || booking.id === bookingId) ? { ...booking, status: 'rejected' } : booking));
+      setBookings(prev => prev.map(booking => 
+        (booking._id === bookingId || booking.id === bookingId) 
+          ? { ...booking, status: 'rejected' } 
+          : booking
+      ));
     } catch (error) {
       console.error('Failed to reject booking', error);
+      alert('Failed to reject booking.');
     }
   };
 
