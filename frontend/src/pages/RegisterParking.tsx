@@ -134,9 +134,12 @@ export default function RegisterParking() {
       Array.from(formData.photos).forEach((file) => data.append('photos', file));
 
       // Append coordinates as array fields (common server expectation)
-      data.append('location[coordinates][]', String(markerPosition.longitude));
-      data.append('location[coordinates][]', String(markerPosition.latitude));
-      data.append('location[type]', 'Point');
+     // Instead of adding nested fields, stringify the whole location object:
+data.append('location', JSON.stringify({
+  type: 'Point',
+  coordinates: [Number(markerPosition.longitude), Number(markerPosition.latitude)]
+}));
+
 
       // DEBUG: print entries
       for (const pair of data.entries()) console.log('FormData entry:', pair[0], pair[1]);
