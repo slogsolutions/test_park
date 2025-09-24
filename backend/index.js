@@ -19,7 +19,7 @@ import axios from 'axios';
 import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
-
+import userTokensRouter from "./routes/userTokenRoutes.js"
 // Load .env from server/ folder explicitly so running from project root still works
 const envPath = path.resolve(process.cwd(), 'server', '.env');
 const result = dotenv.config({ path: envPath });
@@ -72,7 +72,7 @@ app.use(
 
 // Use JSON parser for application/json bodies
 app.use(express.json());
-
+app.use("/api/users", userTokensRouter);
 app.use('/api/auth', authRoutes);
 app.use('/api/kyc', kycRoutes);
 app.use('/api/parking', parkingRoutes);

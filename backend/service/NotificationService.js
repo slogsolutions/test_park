@@ -1,23 +1,61 @@
+// olf --- for Single 
+// import admin from "../utils/firebase.js";
+
+// class NotificationService {
+//     static async sendNotification (deviceToken, title,body) {
+//         const message = {
+//             notification : {
+//                 title, body 
+//             },
+//             token : deviceToken
+//         };
+//         try{
+//             const response = await admin.messaging().send(message);
+//             return response;
+//         }
+//         catch(error){
+//             throw error;
+//         }
+//     }
+// }
+// export default NotificationService ;
+
+
 import admin from "../utils/firebase.js";
 
 class NotificationService {
-    static async sendNotification (deviceToken, title,body) {
-        const message = {
-            notification : {
-                title, body 
-            },
-            token : deviceToken
-        };
-        try{
-            const response = await admin.messaging().send(message);
-            return response;
-        }
-        catch(error){
-            throw error;
-        }
+  /**
+   * Send a notification to a single device
+   */
+  static async sendToDevice(token, title, body, data = {}) {
+    const message = {
+      notification: { title, body },
+      data, // optional extra payload
+      token,
+    };
+    return await admin.messaging().send(message);
+  }
+
+  /**
+   * Send notification to multiple devices (multicast)
+   */
+  static async sendToMultiple(tokens, title, body, data = {}) {
+    if (!tokens || tokens.length === 0) {
+      return { successCount: 0, failureCount: 0, responses: [] };
     }
+
+    const message = {
+      notification: { title, body },
+      data,
+      tokens,
+    };
+
+    const response = await admin.messaging().sendMulticast(message);
+    return response;
+  }
 }
-export default NotificationService ;
+
+export default NotificationService;
 
 
 
