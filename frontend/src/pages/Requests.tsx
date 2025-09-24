@@ -28,7 +28,8 @@ const ProviderBookings = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  const [rejectReason, setRejectReason] = useState('');
+  // Changed: per-booking reasons map instead of a single shared string
+  const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
 
   useEffect(() => {
@@ -92,22 +93,35 @@ const ProviderBookings = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason }),
       });
-      setBookings(prev => prev.map(booking => booking.id === bookingId ? { ...booking, status: 'rejected' } : booking));
+      // Update local state robustly: check both _id and id
+      setBookings(prev => prev.map(booking => (booking._id === bookingId || booking.id === bookingId) ? { ...booking, status: 'rejected' } : booking));
     } catch (error) {
       console.error('Failed to reject booking', error);
     }
   };
 
+  // handleReject now initialises selectedBooking id and clears the specific reason entry
   const handleReject = (bookingId: string) => {
     setSelectedBooking(bookingId);
-    setRejectReason('');
+    setRejectReasons((prev) => ({ ...prev, [bookingId]: '' }));
   };
 
+  // confirmReject now uses selectedBooking and the per-booking reason
   const confirmReject = () => {
-    if (selectedBooking && rejectReason.trim()) {
-      onRejectBooking(selectedBooking, rejectReason);
+    if (selectedBooking) {
+      const reason = (rejectReasons[selectedBooking] || '').trim();
+      if (!reason) {
+        alert('Please provide a reason before rejecting.');
+        return;
+      }
+      onRejectBooking(selectedBooking, reason);
+      // clear selected and the stored reason
       setSelectedBooking(null);
-      setRejectReason('');
+      setRejectReasons((prev) => {
+        const next = { ...prev };
+        delete next[selectedBooking];
+        return next;
+      });
     }
   };
 
@@ -196,43 +210,54 @@ const ProviderBookings = () => {
 
         {/* Booking List */}
         <div className="space-y-4">
-          {filteredBookings.map((booking:any) => (
-            <motion.div key={booking.id} layout className="p-6 border rounded-xl">
-              <div className={`p-2 rounded-lg ${getStatusBgColor(booking.status)} mr-4`}>
-                {getStatusIcon(booking.status)}
-              </div>
-              <div className="flex justify-between">
-                <div>
-                  <h3 className="text-lg font-medium">{booking.user?.name || booking.customerName}</h3>
-                  <p className="text-sm text-gray-500">{booking.serviceName}</p>
-                  <p className="text-sm text-gray-500"><Calendar className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleDateString()}</p>
-                  <p className="text-sm text-gray-500"><Clock className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+          {filteredBookings.map((booking:any) => {
+            // determine a stable id used by this UI for lookups
+            const stableId = booking._id || booking.id;
+            return (
+              <motion.div key={booking.id} layout className="p-6 border rounded-xl">
+                <div className={`p-2 rounded-lg ${getStatusBgColor(booking.status)} mr-4`}>
+                  {getStatusIcon(booking.status)}
                 </div>
-                <div className="text-right">
-                  <p>Price: {booking.totalPrice ? booking.totalPrice.toFixed(2) : "N/A"}</p>
-                  <p className={`text-sm font-medium ${booking.status === 'accepted' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : 'text-red-600'}`}>
-                    {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                  </p>
+                <div className="flex justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium">{booking.user?.name || booking.customerName}</h3>
+                    <p className="text-sm text-gray-500">{booking.serviceName}</p>
+                    <p className="text-sm text-gray-500"><Calendar className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleDateString()}</p>
+                    <p className="text-sm text-gray-500"><Clock className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                  <div className="text-right">
+                    <p>Price: {booking.totalPrice ? booking.totalPrice.toFixed(2) : "N/A"}</p>
+                    <p className={`text-sm font-medium ${booking.status === 'accepted' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : 'text-red-600'}`}>
+                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              {booking.status === 'pending' && (
-                <div className="mt-4 flex space-x-3">
-                  {selectedBooking === booking.id ? (
-                    <>
-                      <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="Reason for rejection..." className="w-full px-4 py-2 border rounded-lg"></textarea>
-                      <button onClick={confirmReject} className="px-4 py-2 bg-red-600 text-white rounded-lg">Confirm Reject</button>
-                    </>
-                  ) : (
-                    <>
-                      <button onClick={() => handleStatusChange(booking._id, 'accepted')} className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Accept</button>
-                      <button onClick={() => handleReject(booking.id)} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Reject</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </motion.div>
-          ))}
+                {booking.status === 'pending' && (
+                  <div className="mt-4 flex space-x-3">
+                    {selectedBooking === stableId ? (
+                      <>
+                        {/* Use per-booking reason state and update only that entry */}
+                        <textarea
+                          value={rejectReasons[stableId] || ""}
+                          onChange={(e) => setRejectReasons(prev => ({ ...prev, [stableId]: e.target.value }))}
+                          placeholder="Reason for rejection..."
+                          className="w-full px-4 py-2 border rounded-lg"
+                        ></textarea>
+                        <button onClick={confirmReject} className="px-4 py-2 bg-red-600 text-white rounded-lg">Confirm Reject</button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={() => handleStatusChange(booking._id, 'accepted')} className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Accept</button>
+                        {/* Pass stableId to ensure selectedBooking matches what we use elsewhere */}
+                        <button onClick={() => handleReject(stableId)} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Reject</button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            );
+          })}
         </div>
       </div>
     </div>
