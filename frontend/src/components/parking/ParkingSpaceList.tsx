@@ -1,120 +1,13 @@
-// import React from 'react';
-// import { ParkingSpace } from '../../types/parking';
-
-// interface ParkingSpaceListProps {
-//   spaces: ParkingSpace[];
-//   onSpaceSelect: (space: ParkingSpace) => void;
-//   searchRadius: number;
-//   onRadiusChange: (radius: number) => void;
-//   userLocation: { lat: number; lng: number }; // User location added
-//   filters: {
-//     amenities: { [key: string]: boolean };
-//     priceRange: [number, number];
-//   };
-// }
-
-// // Haversine formula to calculate distance
-// const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-//   const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-//   const R = 6371; // Earth's radius in kilometers
-//   const dLat = toRadians(lat2 - lat1);
-//   const dLon = toRadians(lon2 - lon1);
-//   const a =
-//     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-//     Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-//   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-//   return R * c; // Distance in kilometers
-// };
-
-// export default function ParkingSpaceList({
-//   spaces,
-//   onSpaceSelect,
-//   searchRadius,
-//   onRadiusChange,
-//   userLocation,
-// }: ParkingSpaceListProps) {
-//   return (
-//     <div className="absolute bottom-4 left-4 right-4 bg-white rounded-lg shadow-lg p-4 max-h-60 overflow-y-auto">
-//       {/* Search Radius Slider */}
-//       <div className="mb-4">
-//         <label className="block text-sm font-medium text-gray-700 mb-1">
-//           Search Radius: {searchRadius / 1000} km
-//         </label>
-//         <input
-//           type="range"
-//           min="1000"
-//           max="20000"
-//           step="1000"
-//           value={searchRadius}
-//           onChange={(e) => onRadiusChange(Number(e.target.value))}
-//           className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-red-500"
-//         />
-//       </div>
-
-//       {/* Parking Spaces List */}
-//       <div className="space-y-2">
-//         {spaces.length === 0 ? (
-//           <p className="text-gray-500 text-center">No parking spaces found in this area.</p>
-//         ) : (
-//           spaces.map((space: any) => {
-//             // Calculate the distance using the Haversine formula
-//             const distance = calculateDistance(
-//               userLocation.lat,
-//               userLocation.lng,
-//               space.location.coordinates[1], // Latitude of parking space
-//               space.location.coordinates[0]  // Longitude of parking space
-//             );
-
-//             // Check if the space is within the search radius
-//             const isWithinRadius = distance <= searchRadius / 1000;
-
-//             if (!isWithinRadius) return null; // If it's outside the search radius, skip this space
-
-//             return (
-//               <div
-//                 key={space._id}
-//                 onClick={() => onSpaceSelect(space)}
-//                 className="flex justify-between items-center p-3 hover:bg-red-50 rounded-lg cursor-pointer border border-gray-100 shadow-sm"
-//               >
-//                 {/* Parking Space Details */}
-//                 <div>
-//                   <h3 className="font-semibold text-gray-900">{space.title || 'Unnamed Parking Space'}</h3>
-//                   <p className="text-sm text-gray-600">
-//                     {space.address?.street || 'Unknown Street'}, {space.address?.city || 'Unknown City'}
-//                   </p>
-//                 </div>
-
-//                 {/* Pricing, Amenities, and Distance */}
-//                 <div className="text-right">
-//                   <p className="text-red-600 font-semibold">
-//                     ₹{space.pricePerHour || 0}/hr
-//                   </p>
-//                   <p className="text-xs text-gray-500">
-//                     {space.amenities?.length || 0} amenities
-//                   </p>
-//                   {distance && (
-//                     <p className="text-xs text-gray-500">~{distance.toFixed(1)} km away</p>
-//                   )}
-//                 </div>
-//               </div>
-//             );
-//           })
-//         )}
-//       </div>
-//     </div>
-//   );
-// }
-
-
 import React from 'react';
 import { ParkingSpace } from '../../types/parking';
+import { FaStar, FaMapMarkerAlt, FaClock, FaShieldAlt, FaBolt, FaWheelchair, FaVideo, FaUmbrella, FaCar, FaSearch, FaRoad } from 'react-icons/fa';
 
 interface ParkingSpaceListProps {
   spaces: ParkingSpace[];
   onSpaceSelect: (space: ParkingSpace) => void;
   searchRadius: number;
   onRadiusChange: (radius: number) => void;
-  userLocation: { lat: number; lng: number }; // User location added
+  userLocation: { lat: number; lng: number };
   filters: {
     amenities: { [key: string]: boolean };
     priceRange: [number, number];
@@ -124,21 +17,46 @@ interface ParkingSpaceListProps {
 // Haversine formula to calculate distance
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   const toRadians = (degrees: number) => (degrees * Math.PI) / 180;
-  const R = 6371; // Earth's radius in kilometers
+  const R = 6371;
   const dLat = toRadians(lat2 - lat1);
   const dLon = toRadians(lon2 - lon1);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c; // Distance in kilometers
+  return R * c;
+};
+
+const getAmenityIcon = (amenity: string) => {
+  const amenityLower = amenity.toLowerCase();
+  const amenityIcons: { [key: string]: React.ElementType } = {
+    security: FaShieldAlt,
+    'cctv': FaVideo,
+    'surveillance': FaVideo,
+    'camera': FaVideo,
+    charging: FaBolt,
+    'electric': FaBolt,
+    wheelchair: FaWheelchair,
+    'accessible': FaWheelchair,
+    covered: FaUmbrella,
+    'roof': FaUmbrella,
+    'indoor': FaUmbrella,
+    '24/7': FaClock,
+  };
+  
+  for (const [key, icon] of Object.entries(amenityIcons)) {
+    if (amenityLower.includes(key)) {
+      return icon;
+    }
+  }
+  
+  return FaCar;
 };
 
 export default function ParkingSpaceList({
   spaces,
   onSpaceSelect,
   searchRadius,
-  onRadiusChange,
   userLocation,
   filters,
 }: ParkingSpaceListProps) {
@@ -147,8 +65,8 @@ export default function ParkingSpaceList({
     const distance = calculateDistance(
       userLocation.lat,
       userLocation.lng,
-      space.location.coordinates[1], // Latitude
-      space.location.coordinates[0]  // Longitude
+      space.location.coordinates[1],
+      space.location.coordinates[0]
     );
 
     // Check if within search radius
@@ -156,87 +74,164 @@ export default function ParkingSpaceList({
 
     // Check amenities
     for (const [key, value] of Object.entries(filters.amenities)) {
-      if (value && !space.amenities?.includes(key)) {
-        return false; // If a selected amenity is not in the space's amenities, exclude it
+      if (value && !space.amenities?.some((amenity: string) => 
+        amenity.toLowerCase().includes(key.toLowerCase())
+      )) {
+        return false;
       }
     }
 
     // Check price range
-    if (
-      space.pricePerHour < filters.priceRange[0] ||
-      space.pricePerHour > filters.priceRange[1]
-    ) {
+    const price = space.pricePerHour ?? space.price ?? 0;
+    if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
       return false;
     }
 
-    // Check if there are available slots
-//     const hasAvailableSlots = space.availability?.some((day: any) =>
-//       day.slots.some((slot: any) => !slot.isBooked)
-//     );
-
-//     console.log("All Parking Spaces:", spaces);
-// console.log("User Location:", userLocation);
-
-//     if (!hasAvailableSlots) return false; // Exclude fully booked spaces
-
     // Add distance property to the space
-    space.distance = distance; // Attach distance to the space object
+    space.distance = distance;
     return true;
   });
 
-  return (
-    <div className="absolute bottom-4 left-4 right-4 bg-white rounded-lg shadow-lg p-4 max-h-60 overflow-y-auto">
-      {/* Search Radius Slider */}
-      <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Search Radius: {searchRadius / 1000} km
-        </label>
-        <input
-          type="range"
-          min="1000"
-          max="20000"
-          step="1000"
-          value={searchRadius}
-          onChange={(e) => onRadiusChange(Number(e.target.value))}
-          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer focus:ring-2 focus:ring-red-500"
-        />
+  if (filteredSpaces.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center p-6 text-center h-48 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl border border-white/30">
+        <div className="w-16 h-16 bg-gradient-to-br from-blue-200 to-purple-300 rounded-full flex items-center justify-center mb-3 shadow-lg">
+          <FaSearch className="text-2xl text-blue-600" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-700 mb-1">No parking spaces found</h3>
+        <p className="text-gray-500 text-sm mb-3 max-w-xs">Try adjusting your filters or search radius</p>
+        <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-lg p-2 max-w-xs">
+          <p className="text-yellow-700 text-xs">💡 Try increasing search radius or removing filters</p>
+        </div>
       </div>
+    );
+  }
 
-      {/* Parking Spaces List */}
-      <div className="space-y-2">
-        {filteredSpaces.length === 0 ? (
-          <p className="text-gray-500 text-center">No parking spaces match your filters.</p>
-        ) : (
-          filteredSpaces.map((space: any) => (
-            <div
-              key={space._id}
-              onClick={() => onSpaceSelect(space)}
-              className="flex justify-between items-center p-3 hover:bg-red-50 rounded-lg cursor-pointer border border-gray-100 shadow-sm"
-            >
-              {/* Parking Space Details */}
-              <div>
-                <h3 className="font-semibold text-gray-900">{space.title || 'Unnamed Parking Space'}</h3>
-                <p className="text-sm text-gray-600">
-                  {space.address?.street || 'Unknown Street'}, {space.address?.city || 'Unknown City'}
-                </p>
+  return (
+    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+      {filteredSpaces.map((space: any) => {
+        const address: any = space.address || {};
+        const amenities = Array.isArray(space.amenities) ? space.amenities : [];
+        const price = space.pricePerHour ?? space.price ?? 0;
+        const rating = typeof space.rating === 'number' ? space.rating : 0;
+        const availableSpots = space.availableSpots || 1;
+
+        return (
+          <div
+            key={space._id}
+            onClick={() => onSpaceSelect(space)}
+            className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-0.5 border border-white/30 overflow-hidden hover:border-blue-300"
+          >
+            <div className="p-3">
+              {/* Header Row */}
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-gray-900 text-sm leading-tight truncate mb-1">
+                    {space.title || 'Premium Parking Space'}
+                  </h3>
+                  <div className="flex items-center text-gray-600 text-xs">
+                    <FaMapMarkerAlt className="text-red-500 mr-1 flex-shrink-0" />
+                    <span className="truncate">
+                      {address.street || 'Unknown Street'}, {address.city || 'Unknown City'}
+                    </span>
+                  </div>
+                </div>
+                
+                {/* Price and Rating */}
+                <div className="text-right ml-2 flex-shrink-0">
+                  <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-1 rounded-lg text-sm font-bold">
+                    ₹{price}/hr
+                  </div>
+                  {rating > 0 && (
+                    <div className="flex items-center justify-end mt-1">
+                      <FaStar className="text-yellow-400 text-xs mr-1" />
+                      <span className="text-xs font-semibold text-gray-700">{rating.toFixed(1)}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Pricing, Amenities, and Distance */}
-              <div className="text-right">
-                <p className="text-red-600 font-semibold">
-                  ₹{space.pricePerHour || 0}/hr
-                </p>
-                <p className="text-xs text-gray-500">
-                  {space.amenities?.length || 0} amenities
-                </p>
-                {space.distance && (
-                  <p className="text-xs text-gray-500">~{space.distance.toFixed(1)} km away</p>
-                )}
+              {/* Distance and Availability */}
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center text-xs text-gray-600 bg-blue-50 px-2 py-1 rounded-full">
+                  <FaRoad className="text-blue-500 mr-1" />
+                  <span>{space.distance?.toFixed(1)} km away</span>
+                </div>
+                <div className="flex items-center text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-semibold">
+                  {availableSpots} spot{availableSpots !== 1 ? 's' : ''} available
+                </div>
+              </div>
+
+              {/* Amenities */}
+              {amenities.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex flex-wrap gap-1">
+                    {amenities.slice(0, 2).map((amenity: string, idx: number) => {
+                      const AmenityIcon = getAmenityIcon(amenity);
+                      return (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center px-2 py-1 bg-gradient-to-r from-blue-50 to-blue-100 text-blue-700 rounded-full text-xs font-medium border border-blue-200"
+                          title={amenity}
+                        >
+                          <AmenityIcon className="mr-1 text-xs" />
+                          {amenity.length > 12 ? amenity.substring(0, 10) + '...' : amenity}
+                        </span>
+                      );
+                    })}
+                    {amenities.length > 2 && (
+                      <span className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium">
+                        +{amenities.length - 2} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <div className="flex items-center text-xs text-gray-500">
+                  <span className="flex items-center bg-gray-100 px-2 py-1 rounded-full">
+                    <FaClock className="mr-1 text-blue-500 text-xs" />
+                    {space.available24_7 ? '24/7 Available' : 'Limited hours'}
+                  </span>
+                </div>
+                
+                <button 
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSpaceSelect(space);
+                  }}
+                >
+                  View Details
+                </button>
               </div>
             </div>
-          ))
-        )}
-      </div>
+
+            {/* Hover Effect Border */}
+            <div className="absolute inset-0 border-2 border-transparent group-hover:border-blue-300 rounded-xl pointer-events-none transition-all duration-300"></div>
+          </div>
+        );
+      })}
+
+      {/* Custom Scrollbar Styling */}
+      <style jsx>{`
+        .max-h-64::-webkit-scrollbar {
+          width: 6px;
+        }
+        .max-h-64::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .max-h-64::-webkit-scrollbar-thumb {
+          background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+          border-radius: 10px;
+        }
+        .max-h-64::-webkit-scrollbar-thumb:hover {
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+        }
+      `}</style>
     </div>
   );
 }
