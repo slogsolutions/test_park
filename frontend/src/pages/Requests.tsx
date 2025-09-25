@@ -1,3 +1,4 @@
+// frontend/src/pages/Requests.tsx
 import React, { useEffect, useState } from 'react';
 import { 
   Calendar,
@@ -5,21 +6,25 @@ import {
   CheckCircle,
   XCircle,
   Clock3,
-  CalendarDays
+  CalendarDays,
+  Key
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LoadingScreen from './LoadingScreen';
 
 interface Booking {
-  id: string;
-  customerName: string;
-  serviceName: string;
-  startTime: string;
-  price: number;
-  status: 'pending' | 'accepted' | 'rejected';
+  _id?: string;
+  id?: string;
+  customerName?: string;
+  serviceName?: string;
+  startTime?: string;
+  price?: number;
+  status?: 'pending' | 'accepted' | 'rejected' | 'confirmed' | 'completed';
   user?: { name: string };
   totalPrice?: number;
-  _id?: string;
+  paymentStatus?: string;
+  otpVerified?: boolean;
+  providerId?: string | null;
 }
 
 const ProviderBookings = () => {
@@ -28,9 +33,10 @@ const ProviderBookings = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'rejected'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
-  // Changed: per-booking reasons map instead of a single shared string
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
+  const [otpInput, setOtpInput] = useState<string>('');
+  const [verifyingOtp, setVerifyingOtp] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -73,9 +79,12 @@ const ProviderBookings = () => {
         return;
       }
 
+      const data = await response.json();
+      const updatedBooking = data.booking || null;
+
       setBookings((prevBookings: any) =>
         prevBookings.map((booking: any) =>
-          booking._id === bookingId ? { ...booking, status: newStatus } : booking
+          booking._id === bookingId ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId } : booking
         )
       );
 
@@ -86,7 +95,6 @@ const ProviderBookings = () => {
     }
   };
 
-  // ✅ Modified to use same /status route instead of non-existent /reject/:id
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -105,7 +113,6 @@ const ProviderBookings = () => {
         return;
       }
 
-      // Update local state robustly: check both _id and id
       setBookings(prev => prev.map(booking => 
         (booking._id === bookingId || booking.id === bookingId) 
           ? { ...booking, status: 'rejected' } 
@@ -117,13 +124,55 @@ const ProviderBookings = () => {
     }
   };
 
-  // handleReject now initialises selectedBooking id and clears the specific reason entry
+  // Verify OTP function
+  const verifyOtpForBooking = async (bookingId: string) => {
+    if (!otpInput.trim()) {
+      alert('Please enter OTP');
+      return;
+    }
+
+    setVerifyingOtp(bookingId);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-otp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp: otpInput }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || 'OTP verification failed');
+        return;
+      }
+
+      alert('OTP verified — booking confirmed!');
+      // Update local booking status to match backend
+      setBookings(prev => prev.map(booking => 
+        (booking._id === bookingId || booking.id === bookingId) 
+          ? { ...booking, status: 'confirmed', otpVerified: true, startedAt: data.booking?.startedAt || new Date().toISOString(), sessionEndAt: data.booking?.sessionEndAt || null } 
+          : booking
+      ));
+      
+      // Clear OTP input
+      setOtpInput('');
+      setVerifyingOtp(null);
+    } catch (err) {
+      console.error('verify OTP error', err);
+      alert('Error verifying OTP');
+    } finally {
+      setVerifyingOtp(null);
+    }
+  };
+
   const handleReject = (bookingId: string) => {
     setSelectedBooking(bookingId);
     setRejectReasons((prev) => ({ ...prev, [bookingId]: '' }));
   };
 
-  // confirmReject now uses selectedBooking and the per-booking reason
   const confirmReject = () => {
     if (selectedBooking) {
       const reason = (rejectReasons[selectedBooking] || '').trim();
@@ -132,7 +181,6 @@ const ProviderBookings = () => {
         return;
       }
       onRejectBooking(selectedBooking, reason);
-      // clear selected and the stored reason
       setSelectedBooking(null);
       setRejectReasons((prev) => {
         const next = { ...prev };
@@ -144,7 +192,7 @@ const ProviderBookings = () => {
 
   const filterBookings = () => {
     return bookings.filter((booking) => {
-      const name = booking.customerName ? booking.customerName.toLowerCase() : "";
+      const name = booking.user?.name ? booking.user.name.toLowerCase() : (booking.customerName || "").toLowerCase();
       const service = booking.serviceName ? booking.serviceName.toLowerCase() : "";
       
       const matchesSearch = name.includes(searchTerm.toLowerCase()) || service.includes(searchTerm.toLowerCase());
@@ -176,6 +224,7 @@ const ProviderBookings = () => {
     switch (status) {
       case 'accepted': return <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
       case 'rejected': return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
+      case 'confirmed': return <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
       default: return <Clock3 className="h-5 w-5 text-primary-600 dark:text-primary-400" />;
     }
   };
@@ -184,6 +233,7 @@ const ProviderBookings = () => {
     switch (status) {
       case 'accepted': return 'bg-green-50 dark:bg-green-900/20';
       case 'rejected': return 'bg-red-50 dark:bg-red-900/20';
+      case 'confirmed': return 'bg-blue-50 dark:bg-blue-900/20';
       default: return 'bg-primary-50 dark:bg-primary-900/20';
     }
   };
@@ -222,60 +272,147 @@ const ProviderBookings = () => {
             <option value="pending">Pending</option>
             <option value="accepted">Accepted</option>
             <option value="rejected">Rejected</option>
+            <option value="confirmed">Confirmed</option>
           </select>
         </div>
 
         {/* Booking List */}
         <div className="space-y-4">
-          {filteredBookings.map((booking:any) => {
-            // determine a stable id used by this UI for lookups
+          {filteredBookings.map((booking: any) => {
             const stableId = booking._id || booking.id;
             return (
-              <motion.div key={booking.id} layout className="p-6 border rounded-xl">
-                <div className={`p-2 rounded-lg ${getStatusBgColor(booking.status)} mr-4`}>
-                  {getStatusIcon(booking.status)}
-                </div>
-                <div className="flex justify-between">
-                  <div>
-                    <h3 className="text-lg font-medium">{booking.user?.name || booking.customerName}</h3>
-                    <p className="text-sm text-gray-500">{booking.serviceName}</p>
-                    <p className="text-sm text-gray-500"><Calendar className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleDateString()}</p>
-                    <p className="text-sm text-gray-500"><Clock className="inline-block w-4 h-4 mr-2" /> {new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+              <motion.div key={stableId} layout className="p-6 border rounded-xl">
+                <div className="flex justify-between items-start">
+                  <div className="flex items-start">
+                    <div className={`p-2 rounded-lg ${getStatusBgColor(booking.status)} mr-4`}>
+                      {getStatusIcon(booking.status)}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-medium">{booking.user?.name || booking.customerName}</h3>
+                      <p className="text-sm text-gray-500">{booking.serviceName}</p>
+                      <p className="text-sm text-gray-500">
+                        <Calendar className="inline-block w-4 h-4 mr-2" /> 
+                        {booking.startTime ? new Date(booking.startTime).toLocaleDateString() : 'N/A'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        <Clock className="inline-block w-4 h-4 mr-2" /> 
+                        {booking.startTime ? new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                      </p>
+                    </div>
                   </div>
                   <div className="text-right">
-                    <p>Price: {booking.totalPrice ? booking.totalPrice.toFixed(2) : "N/A"}</p>
-                    <p className={`text-sm font-medium ${booking.status === 'accepted' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : 'text-red-600'}`}>
-                      {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                    <p className="text-lg font-semibold">₹{booking.totalPrice ? Math.ceil(booking.totalPrice) : "N/A"}</p>
+                    <p className={`text-sm font-medium ${booking.status === 'accepted' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : booking.status === 'confirmed' ? 'text-blue-600' : 'text-yellow-600'}`}>
+                      {booking.status ? (booking.status.charAt(0).toUpperCase() + booking.status.slice(1)) : 'Unknown'}
                     </p>
+                    {booking.paymentStatus && (
+                      <p className={`text-xs ${booking.paymentStatus === 'paid' ? 'text-green-500' : 'text-orange-500'}`}>
+                        Payment: {booking.paymentStatus}
+                      </p>
+                    )}
                   </div>
                 </div>
 
+                {/* Action buttons - show different options based on status and payment */}
                 {booking.status === 'pending' && (
-                  <div className="mt-4 flex space-x-3">
+                  <div className="mt-4">
                     {selectedBooking === stableId ? (
-                      <>
-                        {/* Use per-booking reason state and update only that entry */}
+                      <div className="flex space-x-3">
                         <textarea
                           value={rejectReasons[stableId] || ""}
                           onChange={(e) => setRejectReasons(prev => ({ ...prev, [stableId]: e.target.value }))}
                           placeholder="Reason for rejection..."
-                          className="w-full px-4 py-2 border rounded-lg"
-                        ></textarea>
-                        <button onClick={confirmReject} className="px-4 py-2 bg-red-600 text-white rounded-lg">Confirm Reject</button>
-                      </>
+                          className="flex-1 px-4 py-2 border rounded-lg"
+                        />
+                        <button 
+                          onClick={confirmReject} 
+                          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                        >
+                          Confirm Reject
+                        </button>
+                        <button 
+                          onClick={() => setSelectedBooking(null)} 
+                          className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     ) : (
-                      <>
-                        <button onClick={() => handleStatusChange(booking._id, 'accepted')} className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Accept</button>
-                        {/* Pass stableId to ensure selectedBooking matches what we use elsewhere */}
-                        <button onClick={() => handleReject(stableId)} className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200">Reject</button>
-                      </>
+                      <div className="flex space-x-3">
+                        <button 
+                          onClick={() => handleStatusChange(booking._id, 'accepted')} 
+                          className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                        >
+                          Accept
+                        </button>
+                        <button 
+                          onClick={() => handleReject(stableId)} 
+                          className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                        >
+                          Reject
+                        </button>
+                      </div>
                     )}
+                  </div>
+                )}
+
+                {/* OTP Verification section - only show for paid bookings that are accepted */}
+                {booking.paymentStatus === 'paid' && booking.status === 'accepted' && (
+                  <div className="mt-4 p-4 bg-blue-50 rounded-lg border">
+                    <div className="flex items-center mb-3">
+                      <Key className="h-5 w-5 text-blue-600 mr-2" />
+                      <h4 className="text-sm font-semibold text-blue-800">OTP Verification Required</h4>
+                    </div>
+                    <p className="text-sm text-blue-600 mb-3">
+                      Ask the customer for their OTP to confirm their arrival and start the parking session.
+                    </p>
+                    <div className="flex space-x-3">
+                      <input
+                        type="text"
+                        placeholder="Enter 6-digit OTP"
+                        value={verifyingOtp === stableId ? otpInput : ''}
+                        onChange={(e) => {
+                          if (verifyingOtp === stableId) {
+                            setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                          } else {
+                            setVerifyingOtp(stableId);
+                            setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                          }
+                        }}
+                        className="flex-1 px-3 py-2 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        maxLength={6}
+                      />
+                      <button
+                        onClick={() => verifyOtpForBooking(stableId)}
+                        disabled={verifyingOtp === stableId && (!otpInput || otpInput.length !== 6)}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded transition-colors duration-200 flex items-center"
+                      >
+                        {verifyingOtp === stableId && otpInput.length !== 6 ? (
+                         "Verifying..." //user input is less than 6 digits
+                        ) : (
+                          <> 
+                          {/* user ne input  */}
+                            <Key className="h-4 w-4 mr-2" />
+                            Verify OTP
+                          </>
+                          
+                        )}
+                      </button>
+                    </div>
                   </div>
                 )}
               </motion.div>
             );
           })}
         </div>
+
+        {filteredBookings.length === 0 && (
+          <div className="text-center py-12">
+            <CalendarDays className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No bookings found</h3>
+            <p className="text-gray-500">No bookings match your current filters.</p>
+          </div>
+        )}
       </div>
     </div>
   );
