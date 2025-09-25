@@ -20,6 +20,7 @@ import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import userTokensRouter from "./routes/userTokenRoutes.js"
+import statsRoutes from './routes/stats.js';
 // Load .env from server/ folder explicitly so running from project root still works
 const envPath = path.resolve(process.cwd(), 'server', '.env');
 const result = dotenv.config({ path: envPath });
@@ -82,6 +83,7 @@ app.use('/api/booking', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use("/api/admin", adminRoutes);
+app.use('/api/stats', statsRoutes);
 
 
 // Only initialize multer for routes that need multipart/form-data

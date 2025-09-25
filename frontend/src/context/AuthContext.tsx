@@ -1,3 +1,4 @@
+// src/context/AuthContext.tsx
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { AuthState, User } from '../types/auth';
 import { authService } from '../services/auth.service';
@@ -129,15 +130,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async() => {
     const token = localStorage.getItem("fcm_token");
-if (token) {
-  await api.delete("/users/remove-token", { data: { fcmToken: token }} as any);
-  localStorage.removeItem("fcm_token");
-}
+    if (token) {
+      await api.delete("/users/remove-token", { data: { fcmToken: token }} as any);
+      localStorage.removeItem("fcm_token");
+    }
     localStorage.removeItem('token');
     dispatch({ type: 'LOGOUT' });
   };
 
-  // ✅ NEW: Manually set user in state (for immediate UI update after KYC etc.)
+  // ✅ Manual setter to immediately store a new user object in state (used after edits/KYC)
   const setUser = (user: User | null) => {
     if (user) {
       dispatch({ type: 'LOGIN_SUCCESS', payload: user });
@@ -146,7 +147,7 @@ if (token) {
     }
   };
 
-  // ✅ NEW: Fetch fresh profile from backend (used after KYC approval)
+  // ✅ Refresh user from server
   const refreshUser = async () => {
     try {
       const token = localStorage.getItem('token');
