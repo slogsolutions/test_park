@@ -1,28 +1,65 @@
-// import cron from "node-cron";
-// import mongoose from "mongoose";
-// import Booking from "./models/Booking.js"; // Import your Booking model
+import cron from 'node-cron';
+import mongoose from 'mongoose';
+import Booking from './models/Booking.js';
+import ParkingSpace from './models/ParkingSpace.js';
 
-// const deleteExpiredBookings = async () => {
-//   try {
-//     const oneHourAgo = new Date();
-//     oneHourAgo.setHours(oneHourAgo.getHours() - 1); // Subtract 1 hour
+// This function checks bookings and marks them completed when endTime <= now
+export const startBookingCompletionCron = () => {
+  // Run every minute
+  cron.schedule('* * * * *', async () => {
+    try {
+      const now = new Date();
+      // Find bookings that are accepted/confirmed and whose endTime is in the past but not yet marked completed
+      const toComplete = await Booking.find({
+        status: { $in: ['accepted', 'confirmed'] },
+        endTime: { $lte: now },
+        completedAt: null,
+      });
 
-//     // Delete bookings that were created more than 1 hour ago and are still pending
-//     const result = await Booking.deleteMany({ 
-//       createdAt: { $lte: oneHourAgo }, 
-//       status: "pending" // Only delete if still pending
-//     });
+      for (const booking of toComplete) {
+        booking.status = 'completed';
+        booking.completedAt = new Date();
+        await booking.save();
 
-//     console.log(`${result.deletedCount} expired bookings deleted at ${new Date().toLocaleString()}`);
-//   } catch (error) {
-//     console.error("Error deleting expired bookings:", error);
-//   }
-// };
+        // Optional: free the slot in parkingSpace availability
+        try {
+          if (booking.parkingSpace) {
+            const startDateMidnight = new Date(booking.startTime);
+            startDateMidnight.setHours(0, 0, 0, 0);
+            const startTime = new Date(booking.startTime);
+            const endTime = new Date(booking.endTime);
 
-// // Schedule the cron job to run every hour
-// cron.schedule("0 * * * *", deleteExpiredBookings, {
-//   scheduled: true,
-//   timezone: "Asia/Kolkata", // Set timezone if needed
-// });
+            await ParkingSpace.findByIdAndUpdate(
+              booking.parkingSpace,
+              {
+                $set: {
+                  'availability.$[dateElem].slots.$[slotElem].isBooked': false,
+                },
+              },
+              {
+                arrayFilters: [
+                  { 'dateElem.date': { $eq: startDateMidnight.getTime() } },
+                  { 'slotElem.startTime': startTime, 'slotElem.endTime': endTime },
+                ],
+                new: true,
+              }
+            );
+          }
+        } catch (innerErr) {
+          console.warn('Failed to free parking slot on completion', innerErr);
+        }
+      }
 
-// export default deleteExpiredBookings;
+      if (toComplete.length) {
+        console.log(`[cron] Completed ${toComplete.length} booking(s) at ${now.toISOString()}`);
+      }
+    } catch (err) {
+      console.error('[cron] Error checking/completing bookings', err);
+    }
+  }, {
+    scheduled: true,
+    timezone: 'Asia/Kolkata',
+  });
+
+  console.log('Booking completion cron job started - runs every minute');
+};
