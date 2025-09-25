@@ -64,7 +64,21 @@ cleanupOverdueBookings().catch((e) => console.error(e));
  */
 export const createBooking = async (req, res) => {
   try {
+<<<<<<< HEAD
     const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+=======
+    // Only extract trusted fields (ignore any client-provided `status`)
+    const {
+      parkingSpaceId,
+      startTime,
+      endTime,
+      vehicleNumber,
+      vehicleType,
+      vehicleModel,
+      contactNumber,
+      chassisNumber
+    } = req.body;
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
 
     // Step 1: Find the parking space and ensure pricePerHour is available
     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
@@ -105,7 +119,7 @@ export const createBooking = async (req, res) => {
     const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
     const totalPrice = durationHours * pricePerHour;
 
-    // Step 4: Create the booking entry
+    // create booking - server enforces status = 'confirmed'
     const booking = new Booking({
       user: req.user._id,
       parkingSpace: parkingSpaceId,
@@ -119,9 +133,16 @@ export const createBooking = async (req, res) => {
       contactNumber,
       chassisNumber,
       providerId,
+<<<<<<< HEAD
       status: 'pending',
       paymentStatus: 'pending',
+=======
+      status: 'confirmed', // <- enforced by server
+      paymentStatus: 'pending'
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
     });
+
+    console.log('Booking to save:', booking);
 
     await booking.save();
 
@@ -331,7 +352,6 @@ export const deleteById = async (req, res) => {
  */
 export const getProviderBookings = async (req, res) => {
   console.log("inside provider booking");
-
   try {
     const providerId = req.user._id;
     console.log('Provider ID:', providerId);
@@ -406,6 +426,7 @@ export const generateOTP = async (req, res) => {
 /**
  * Verify OTP (provider triggers; booking must be accepted first)
  * On success: marks booking confirmed, sets startedAt and sessionEndAt, schedules completion
+<<<<<<< HEAD
 //  */
 // export const verifyOTP = async (req, res) => {
 //   try {
@@ -536,10 +557,36 @@ export const verifyOTP = async (req, res) => {
     // Booking must be accepted
     if (booking.status !== 'accepted') {
       console.warn(`[verifyOTP] booking status is not 'accepted' (${booking.status})`);
+=======
+ */
+export const verifyOTP = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { otp } = req.body;
+    const providerId = req.user._id;
+
+    if (!otp) {
+      return res.status(400).json({ message: 'OTP is required' });
+    }
+
+    const booking = await Booking.findById(bookingId).populate('parkingSpace');
+    if (!booking) {
+      return res.status(404).json({ message: 'Booking not found' });
+    }
+
+    // Only the provider can verify this OTP (if providerId exists)
+    if (booking.providerId && booking.providerId.toString() !== providerId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to verify OTP for this booking' });
+    }
+
+    // Check booking must be accepted by provider first
+    if (booking.status !== 'accepted') {
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
       return res.status(400).json({ message: 'Booking must be accepted to verify OTP' });
     }
 
     // Check OTP presence and expiry
+<<<<<<< HEAD
     if (!booking.otp || !booking.otpExpires) {
       console.warn(`[verifyOTP] booking has no OTP generated`);
       return res.status(400).json({ message: 'OTP not generated for this booking' });
@@ -557,10 +604,22 @@ export const verifyOTP = async (req, res) => {
     }
 
     // OTP valid -> mark booking confirmed and set startedAt + sessionEndAt
+=======
+    if (!booking.otp || !booking.otpExpires || new Date() > booking.otpExpires) {
+      return res.status(400).json({ message: 'OTP expired or not generated' });
+    }
+
+    if (booking.otp !== otp.toString()) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    // OTP valid -> mark booking confirmed and set startedAt
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
     booking.status = 'confirmed';
     booking.otpVerified = true;
     booking.startedAt = new Date();
 
+<<<<<<< HEAD
     // calculate duration from booked start/end
     let sessionMs = 60 * 60 * 1000; // default 1 hour fallback
     if (booking.startTime && booking.endTime) {
@@ -570,10 +629,25 @@ export const verifyOTP = async (req, res) => {
     booking.sessionEndAt = new Date(booking.startedAt.getTime() + sessionMs);
 
     // clear OTP fields
+=======
+    // Calculate session duration based on booking start/end times (fallback to 1 hour)
+    let sessionMs = 0;
+    if (booking.startTime && booking.endTime) {
+      sessionMs = new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime();
+      if (sessionMs <= 0) sessionMs = 60 * 60 * 1000;
+    } else {
+      sessionMs = 60 * 60 * 1000;
+    }
+
+    booking.sessionEndAt = new Date(booking.startedAt.getTime() + sessionMs);
+
+    // Clear OTP fields
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
     booking.otp = null;
     booking.otpExpires = null;
 
     await booking.save();
+<<<<<<< HEAD
     console.log(`[verifyOTP] OTP verified. booking ${bookingId} set to confirmed. sessionEndAt=${booking.sessionEndAt}`);
 
     // schedule in-memory completion (best-effort)
@@ -597,6 +671,29 @@ export const verifyOTP = async (req, res) => {
     return res.status(200).json({ message: 'OTP verified successfully, parking session started', booking });
   } catch (error) {
     console.error('[verifyOTP] unexpected error', error);
+=======
+
+    // Schedule an in-memory timer (best-effort). Will not survive a process restart.
+    const msUntilEnd = booking.sessionEndAt.getTime() - Date.now();
+    if (msUntilEnd > 0) {
+      const timer = setTimeout(() => {
+        markBookingCompleted(booking._id).catch(err => console.error(err));
+      }, msUntilEnd);
+      bookingTimers.set(booking._id.toString(), timer);
+    } else {
+      // Already passed -> mark completed immediately
+      await markBookingCompleted(booking._id);
+    }
+
+    console.log(`OTP verified for booking ${bookingId}, parking session started`);
+
+    return res.status(200).json({
+      message: 'OTP verified successfully, parking session started',
+      booking
+    });
+  } catch (error) {
+    console.error('verifyOTP error', error);
+>>>>>>> 08324938411da6b937b531d6df04ee22bdc6d947
     return res.status(500).json({ message: 'Failed to verify OTP', error: error.message });
   }
 };

@@ -8,6 +8,7 @@ export interface ParkingSpace {
   totalSpots: number;
   distance?: number;
   description?: string;
+  photos?: string[];
 }
 
 export interface ParkingFormData {

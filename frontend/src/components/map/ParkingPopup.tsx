@@ -25,10 +25,10 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const amenities = space.amenities || [];
   
   // Create image array
-  const images = Array.isArray(space.images) && space.images.length > 0 
-    ? space.images 
-    : space.imageUrl 
-      ? [space.imageUrl] 
+  const images = Array.isArray(space.photos) && space.photos.length > 0 
+    ? space.photos 
+    : space.photos 
+      ? [space.photos] 
       : [
           'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
         ];
@@ -36,10 +36,11 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const handleBookNow = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!user) {
-      toast.info('Please log in to book the parking space.');
-      return;
-    }
+  if (!user) {
+    toast.info('Please log in to book the parking space.');
+    navigate('/login');
+    return;
+  }
 
     if (!user.isVerified) {
       toast.info('Your account is not verified. Please complete your verification to book.');

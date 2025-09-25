@@ -6,6 +6,7 @@ import Map, { Marker } from 'react-map-gl';
 import { parkingService } from '../services/parking.service';
 import { useMapContext } from '../context/MapContext';
 import LocationSearchBox from '../components/search/LocationSearch';
+import { reverseGeocode } from '../utils/geocoding'; // ADDED
 
 interface ParkingFormData {
   title: string;
@@ -30,8 +31,8 @@ export default function RegisterParking() {
   const { viewport, setViewport } = useMapContext();
 
   const [markerPosition, setMarkerPosition] = useState({
-    latitude: viewport.latitude || 37.7749,
-    longitude: viewport.longitude || -122.4194,
+    latitude: viewport?.latitude ?? 37.7749,
+    longitude: viewport?.longitude ?? -122.4194,
   });
 
   const [formData, setFormData] = useState<ParkingFormData>({
@@ -75,6 +76,30 @@ export default function RegisterParking() {
     setFormData({ ...formData, availability: updatedAvailability });
   };
 
+  // helper to extract lng/lat from different shapes (markerPosition or map events)
+  const extractLngLat = (obj: any) => {
+    // obj may be { latitude, longitude } or { lat, lng } or { latitude, lng } etc.
+    const longitude =
+      obj?.longitude ?? obj?.lng ?? obj?.lon ?? obj?.long ?? (Array.isArray(obj) ? obj[0] : undefined);
+    const latitude =
+      obj?.latitude ?? obj?.lat ?? obj?.latitude ?? (Array.isArray(obj) ? obj[1] : undefined);
+    return { longitude: longitude !== undefined ? Number(longitude) : undefined, latitude: latitude !== undefined ? Number(latitude) : undefined };
+  };
+
+  // extract from react-map-gl event which sometimes provides lngLat as array or object
+  const extractFromMapEvent = (evt: any) => {
+    const lngLat = evt?.lngLat ?? evt?.point ?? null;
+    if (Array.isArray(evt?.lngLat)) {
+      // [lng, lat]
+      return { longitude: Number(evt.lngLat[0]), latitude: Number(evt.lngLat[1]) };
+    }
+    if (evt?.lngLat && typeof evt.lngLat === 'object') {
+      return { longitude: Number(evt.lngLat.lng ?? evt.lngLat[0]), latitude: Number(evt.lngLat.lat ?? evt.lngLat[1]) };
+    }
+    // last-resort: try evt.lng and evt.lat
+    return { longitude: Number(evt.lng ?? evt.longitude), latitude: Number(evt.lat ?? evt.latitude) };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -97,6 +122,17 @@ export default function RegisterParking() {
         })),
       }));
 
+      // Normalize coordinates from markerPosition
+      const { longitude: rawLon, latitude: rawLat } = extractLngLat(markerPosition);
+
+      if (rawLon === undefined || rawLat === undefined || isNaN(Number(rawLon)) || isNaN(Number(rawLat))) {
+        toast.error('Please pick a valid location on the map before submitting.');
+        return;
+      }
+
+      const lon = Number(rawLon);
+      const lat = Number(rawLat);
+
       // If there are no photos, send JSON (cleanest)
       if (!formData.photos || formData.photos.length === 0) {
         const payload = {
@@ -108,12 +144,11 @@ export default function RegisterParking() {
           address,
           availability: formattedAvailability,
           amenities: formData.amenities,
-          location: { type: 'Point', coordinates: [Number(markerPosition.longitude), Number(markerPosition.latitude)] },
+          location: { type: 'Point', coordinates: [lon, lat] },
         };
 
         console.log('Posting JSON payload to /api/parking:', payload);
 
-        // Use parkingService JSON helper (see below) or call fetch directly
         await parkingService.registerSpaceJSON(payload);
 
         toast.success('Parking space registered successfully!');
@@ -130,34 +165,43 @@ export default function RegisterParking() {
       data.append('pricePerHour', String(formData.pricePerHour));
       data.append('priceParking', String(formData.priceParking));
       data.append('availableSpots', String(formData.availableSpots));
-      formData.amenities.forEach((a) => data.append('amenities', a));
+      // send amenities as one JSON string
+      data.set('amenities', JSON.stringify(formData.amenities));
+      // attach photos under the field name "photos"
       Array.from(formData.photos).forEach((file) => data.append('photos', file));
 
-      // Append coordinates as array fields (common server expectation)
-     // Instead of adding nested fields, stringify the whole location object:
-data.append('location', JSON.stringify({
-  type: 'Point',
-  coordinates: [Number(markerPosition.longitude), Number(markerPosition.latitude)]
-}));
-
+      // Append coordinates deterministically (set avoids duplicate/missing values)
+      const locationObj = { type: 'Point', coordinates: [lon, lat] };
+      data.set('location', JSON.stringify(locationObj));
+      data.set('lng', String(lon));
+      data.set('lat', String(lat));
 
       // DEBUG: print entries
-      for (const pair of data.entries()) console.log('FormData entry:', pair[0], pair[1]);
+      for (const pair of data.entries()) {
+        const val = pair[1] instanceof File ? (pair[1] as File).name : pair[1];
+        console.log('FormData entry:', pair[0], val);
+      }
 
-      await parkingService.registerSpace(data); // existing service that posts FormData
+      await parkingService.registerSpace(data);
       toast.success('Parking space registered successfully!');
       navigate('/');
     } catch (err: any) {
       console.error('Error registering parking space:', err);
-      console.error('Server response:', err.response?.data);
+      // show full server response if any
+      if (err?.response) {
+        console.error('Server status:', err.response.status);
+        console.error('Server response data:', err.response.data);
+      }
       toast.error(`Failed to register parking space: ${err.response?.data?.message || err.message}`);
     }
   };
 
   const handleLocationSelect = (location: any) => {
+    // location object from LocationSearchBox should contain lat/lng or latitude/longitude
+    const { longitude, latitude } = extractLngLat(location);
     setMarkerPosition({
-      latitude: location.latitude,
-      longitude: location.longitude,
+      latitude: latitude ?? markerPosition.latitude,
+      longitude: longitude ?? markerPosition.longitude,
     });
     setFormData({
       ...formData,
@@ -169,18 +213,35 @@ data.append('location', JSON.stringify({
     });
     setViewport({
       ...viewport,
-      latitude: location.latitude,
-      longitude: location.longitude,
+      latitude: latitude ?? viewport.latitude,
+      longitude: longitude ?? viewport.longitude,
       zoom: 14,
     });
   };
 
   const handleGoToCurrentLocation = () => {
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      async (position) => {
         const { latitude, longitude } = position.coords;
+
+        // move marker and map without unmounting the map
         setMarkerPosition({ latitude, longitude });
         setViewport({ ...viewport, latitude, longitude, zoom: 14 });
+
+        // reverse geocode to auto‑fill the address fields
+        try {
+          const loc = await reverseGeocode(latitude, longitude);
+          setFormData((prev) => ({
+            ...prev,
+            street: loc.street || '',
+            city: loc.city || '',
+            state: loc.state || '',
+            zipCode: loc.zipCode || '',
+            country: loc.country || '',
+          }));
+        } catch {
+          toast.info('Location set; address lookup failed — edit fields manually if needed.');
+        }
       },
       () => {
         toast.error('Failed to access your current location.');
@@ -214,7 +275,7 @@ data.append('location', JSON.stringify({
                     className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Ex: Sarthak's Parking Near Main St."
+                    placeholder="Er. Vansh's Bungalow Parking"
                   />
                 </div>
 
@@ -414,10 +475,23 @@ data.append('location', JSON.stringify({
                 <Map
                   {...viewport}
                   onMove={(evt) => setViewport(evt.viewState)}
-                  onClick={(evt: any) => {
-                    const { lat, lng } = evt.lngLat || {};
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                      setMarkerPosition({ latitude: lat, longitude: lng });
+                  onClick={async (evt: any) => {
+                    const { longitude, latitude } = extractFromMapEvent(evt);
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                      setMarkerPosition({ latitude, longitude });
+                      try {
+                        const loc = await reverseGeocode(latitude, longitude);
+                        setFormData((prev) => ({
+                          ...prev,
+                          street: loc.street || '',
+                          city: loc.city || '',
+                          state: loc.state || '',
+                          zipCode: loc.zipCode || '',
+                          country: loc.country || '',
+                        }));
+                      } catch {
+                        toast.info('Pinned location set; address lookup failed.');
+                      }
                     }
                   }}
                   mapboxAccessToken="pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A"
@@ -429,10 +503,23 @@ data.append('location', JSON.stringify({
                       latitude={markerPosition.latitude}
                       longitude={markerPosition.longitude}
                       draggable
-                      onDragEnd={(evt: any) => {
-                        const { lat, lng } = evt.lngLat || {};
-                        if (!isNaN(lat) && !isNaN(lng)) {
-                          setMarkerPosition({ latitude: lat, longitude: lng });
+                      onDragEnd={async (evt: any) => {
+                        const { longitude, latitude } = extractFromMapEvent(evt);
+                        if (!isNaN(latitude) && !isNaN(longitude)) {
+                          setMarkerPosition({ latitude, longitude });
+                          try {
+                            const loc = await reverseGeocode(latitude, longitude);
+                            setFormData((prev) => ({
+                              ...prev,
+                              street: loc.street || '',
+                              city: loc.city || '',
+                              state: loc.state || '',
+                              zipCode: loc.zipCode || '',
+                              country: loc.country || '',
+                            }));
+                          } catch {
+                            toast.info('Pinned location set; address lookup failed.');
+                          }
                         }
                       }}
                     >

@@ -37,7 +37,7 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   
-  // Filters state
+  // Filters state - removed default price filter
   const [filters, setFilters] = useState({
     amenities: {
       covered: false,
@@ -47,6 +47,7 @@ export default function Home() {
       wheelchair: false,
     },
     priceRange: [0, 1000],
+    isPriceFilterActive: false, // New state to track if price filter is active
   });
 
   // Filter amenities configuration
@@ -104,10 +105,13 @@ export default function Home() {
         }
       }
 
-      // Price filter
-      const price = space.pricePerHour ?? space.price ?? 0;
-      if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
-        return false;
+      // Price filter - only apply if user explicitly activated it
+      if (filters.isPriceFilterActive) {
+        const price = space.pricePerHour ?? space.price ?? 0;
+        const [minPrice, maxPrice] = filters.priceRange;
+        if (price < minPrice || price > maxPrice) {
+          return false;
+        }
       }
 
       // Amenities filter
@@ -345,7 +349,8 @@ export default function Home() {
   const handlePriceRangeChange = (min: number, max: number) => {
     setFilters(prev => ({
       ...prev,
-      priceRange: [min, max]
+      priceRange: [min, max],
+      isPriceFilterActive: true // Activate price filter when user changes it
     }));
   };
 
@@ -359,13 +364,14 @@ export default function Home() {
         wheelchair: false,
       },
       priceRange: [0, 1000],
+      isPriceFilterActive: false, // Reset price filter active state
     });
     setSearchQuery('');
   };
 
   const getActiveFilterCount = () => {
     const activeAmenities = Object.values(filters.amenities).filter(Boolean).length;
-    const isPriceFiltered = filters.priceRange[0] > 0 || filters.priceRange[1] < 1000;
+    const isPriceFiltered = filters.isPriceFilterActive;
     const hasSearchQuery = searchQuery.trim() !== '';
     return activeAmenities + (isPriceFiltered ? 1 : 0) + (hasSearchQuery ? 1 : 0);
   };
@@ -482,11 +488,6 @@ export default function Home() {
     }
   };
 
-  // const handleSearchInputChange = async (query: string) => {
-  //   setSearchQuery(query);
-  //   await searchLocations(query);
-  // };
-
   const debouncedSearch = useCallback(
     debounce((query: string) => searchLocations(query), 300),
     [currentLocation]
@@ -597,7 +598,10 @@ export default function Home() {
             <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <span>Price Range</span>
               <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
-                ₹{filters.priceRange[0]} - ₹{filters.priceRange[1]}/hr
+                {filters.isPriceFilterActive 
+                  ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
+                  : 'Any price'
+                }
               </span>
             </h4>
             <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
@@ -608,9 +612,10 @@ export default function Home() {
               type="range"
               min="0"
               max="1000"
+              step="50"
               value={filters.priceRange[1]}
               onChange={(e) => handlePriceRangeChange(filters.priceRange[0], parseInt(e.target.value))}
-              className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+              className="w-full"
             />
           </div>
 
