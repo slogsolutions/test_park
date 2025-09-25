@@ -36,10 +36,11 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const handleBookNow = (e: React.MouseEvent) => {
     e.stopPropagation();
     
-    if (!user) {
-      toast.info('Please log in to book the parking space.');
-      return;
-    }
+  if (!user) {
+    toast.info('Please log in to book the parking space.');
+    navigate('/login');
+    return;
+  }
 
     if (!user.isVerified) {
       toast.info('Your account is not verified. Please complete your verification to book.');
