@@ -1,17 +1,19 @@
+// frontend/src/components/parking/MyBookings.tsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { FaMapMarkerAlt, FaRegCalendarAlt, FaCheckCircle, FaMoneyBillWave, FaTimesCircle, FaCreditCard } from "react-icons/fa"; // Import required icons
+import { FaMapMarkerAlt, FaRegCalendarAlt, FaCheckCircle, FaMoneyBillWave, FaTimesCircle, FaCreditCard } from "react-icons/fa";
 import LoadingScreen from "../../pages/LoadingScreen";
 
 type Booking = {
   _id: string;
-  parkingSpace: { title: string } | null;
+  parkingSpace: any | null;
   startTime: string;
   endTime: string;
   status: string;
   paymentStatus: string;
   totalPrice: number;
+  pricePerHour?: number;
 };
 
 const MyBookings: React.FC = () => {
@@ -66,7 +68,26 @@ const MyBookings: React.FC = () => {
     });
   };
 
-  const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+  // Request OTP from server
+  const requestOTPFromServer = async (bookingId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/generate-otp`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      return response.data;
+    } catch (err: any) {
+      console.error('Failed to request OTP', err);
+      throw err;
+    }
+  };
 
   const handlePayNow = async (bookingId: string, amount: number) => {
     try {
@@ -123,7 +144,7 @@ const MyBookings: React.FC = () => {
           contact: "9999999999",
         },
         theme: {
-          color: "#FFC107", // red color for Razorpay theme
+          color: "#FFC107",
         },
       };
 
@@ -131,6 +152,23 @@ const MyBookings: React.FC = () => {
       razorpay.open();
     } catch {
       alert("Failed to initiate payment");
+    }
+  };
+
+  const handleTrackNow = async (booking: Booking) => {
+    try {
+      const res = await requestOTPFromServer(booking._id);
+      // Navigate and pass OTP to track page (buyer will see OTP)
+      navigate("/track", { 
+        state: { 
+          parkingSpace: booking.parkingSpace, 
+          otp: res.otp, 
+          bookingId: booking._id,
+          expiresAt: res.expiresAt
+        } 
+      });
+    } catch (e) {
+      alert('Failed to generate OTP. Try again.');
     }
   };
 
@@ -165,43 +203,56 @@ const MyBookings: React.FC = () => {
                 <li className="flex items-center">
                   <FaRegCalendarAlt className="mr-2 text-red-500" />
                   <span>Start Time: </span>
-                  <span>{new Date(booking.startTime).toLocaleString()}</span>
+                  <span className="ml-2">{new Date(booking.startTime).toLocaleString()}</span>
                 </li>
                 <li className="flex items-center">
                   <FaRegCalendarAlt className="mr-2 text-red-500" />
                   <span>End Time: </span>
-                  <span>{new Date(booking.endTime).toLocaleString()}</span>
+                  <span className="ml-2">{new Date(booking.endTime).toLocaleString()}</span>
                 </li>
                 <li className="flex items-center">
-                  {/* ✅ Status with clear icon & color */}
+<<<<<<< HEAD
                   {booking.status === "accepted" ? (
                     <>
                       <FaCheckCircle className="mr-2 text-green-500" />
                       <span>Status: </span>
-                      <span className="text-green-600 font-semibold">Approved</span>
+                      <span className="text-green-600 font-semibold ml-2">Approved</span>
+=======
+                  {/* ✅ Status with clear icon & color */}
+                  {booking.status === "confirmed" ? (
+                    <>
+                      <FaCheckCircle className="mr-2 text-green-500" />
+                      <span>Status: </span>
+                      <span className="text-green-600 font-semibold">Confirmed</span>
+>>>>>>> 423170670c12a2d18959a106047d548ef7980b44
                     </>
                   ) : booking.status === "rejected" ? (
                     <>
                       <FaTimesCircle className="mr-2 text-red-500" />
                       <span>Status: </span>
-                      <span className="text-red-600 font-semibold">Rejected</span>
+                      <span className="text-red-600 font-semibold ml-2">Rejected</span>
+                    </>
+                  ) : booking.status === "confirmed" || booking.status === "active" ? (
+                    <>
+                      <FaCheckCircle className="mr-2 text-green-600" />
+                      <span>Status: </span>
+                      <span className="text-green-600 font-semibold ml-2">Active</span>
                     </>
                   ) : (
                     <>
                       <FaCheckCircle className="mr-2 text-yellow-500" />
                       <span>Status: </span>
-                      <span className="text-yellow-600 font-semibold">Pending</span>
+                      <span className="text-yellow-600 font-semibold ml-2">Pending</span>
                     </>
                   )}
                 </li>
                 <li className="flex items-center">
                   <FaMoneyBillWave className="mr-2 text-green-600" />
                   <span>Total Price: </span>
-                  <span>₹{Math.ceil(booking.totalPrice)}</span>
+                  <span className="ml-2">₹{Math.ceil(booking.totalPrice)}</span>
                 </li>
               </ul>
               <div className="mt-4 flex  space-x-4">
-                {/* Buttons centered and aligned */}
                 {booking.status === "pending" && (
                   <button
                     onClick={() => handleCancelBooking(booking._id)}
@@ -211,10 +262,10 @@ const MyBookings: React.FC = () => {
                     <span className="ml-2">Cancel</span>
                   </button>
                 )}
-                {booking.paymentStatus === "pending" && booking.status === "accepted" && (
+                {booking.paymentStatus === "pending" && booking.status === "confirmed" && (
                   <button
                     onClick={() => handlePayNow(booking._id, Math.ceil(booking.totalPrice))}
-                    className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-red-600 transition duration-300 transform hover:scale-105"
+                    className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
                   >
                     <FaCreditCard className="text-xl" />
                     <span className="ml-2">Pay Now</span>
@@ -224,14 +275,7 @@ const MyBookings: React.FC = () => {
               {booking.paymentStatus === "paid" && (
                 <div className="mt-4 ">
                   <button
-                    onClick={() =>
-                      navigate("/track", {
-                        state: {
-                          parkingSpace: booking.parkingSpace,
-                          otp: generateOTP(),
-                        },
-                      })
-                    }
+                    onClick={() => handleTrackNow(booking)}
                     className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105"
                   >
                     Track Now
