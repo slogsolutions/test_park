@@ -4,12 +4,17 @@ export default {
   theme: {
     extend: {
       animation: {
-        pop: 'pop 1s infinite', // Define the animation
+        pop: 'pop 1s infinite',
+        float: 'float 6s ease-in-out infinite',
       },
       keyframes: {
         pop: {
-          '0%, 100%': { transform: 'translateY(0)' }, // Initial and final position
-          '50%': { transform: 'translateY(-5px)' }, // Up position
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-5px)' },
+        },
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-12px)' },
         },
       },
       colors: {
@@ -29,5 +34,7 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    require('@tailwindcss/forms') // optional but recommended for form styles
+  ],
 };

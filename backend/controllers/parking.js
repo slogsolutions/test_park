@@ -1,6 +1,5 @@
 import ParkingSpace from '../models/ParkingSpace.js';
 
-
 export const registerParkingSpace = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ message: 'User not authenticated' });
@@ -39,22 +38,48 @@ export const registerParkingSpace = async (req, res) => {
       }
     }
 
-    // Parse location if string
+    // Parse location if string, and add fallback to lat/lng fields
     let locationParsed = location;
     if (typeof location === 'string') {
       try {
         locationParsed = JSON.parse(location);
-      } catch (err) {
-        return res.status(400).json({ message: '"location" is not valid JSON' });
+      } catch {
+        // keep as string; we will try lat/lng fallback below
       }
     }
 
-    // Validate location
-    if (
-      !locationParsed ||
-      !Array.isArray(locationParsed.coordinates) ||
-      locationParsed.coordinates.length !== 2
-    ) {
+    // Build coordinates from any accepted shape
+    let coords;
+    if (locationParsed) {
+      if (locationParsed.type === 'Point' && Array.isArray(locationParsed.coordinates)) {
+        coords = locationParsed.coordinates.map(Number);
+      } else if (Array.isArray(locationParsed) && locationParsed.length === 2) {
+        coords = locationParsed.map(Number);
+      } else if (locationParsed.lng !== undefined && locationParsed.lat !== undefined) {
+        coords = [Number(locationParsed.lng), Number(locationParsed.lat)];
+      } else if (locationParsed.longitude !== undefined && locationParsed.latitude !== undefined) {
+        coords = [Number(locationParsed.longitude), Number(locationParsed.latitude)];
+      }
+    }
+
+    // Fallback when multipart fields are separate strings: req.body.lat/lng
+    if ((!coords || coords.some(Number.isNaN)) && req.body.lat !== undefined && req.body.lng !== undefined) {
+      coords = [Number(req.body.lng), Number(req.body.lat)];
+    }
+
+    // Log for debugging
+    console.log('req.body.lat/lng', req.body.lat, req.body.lng, 'location raw', typeof req.body.location, req.body.location);
+
+    // Strict validation: numeric and in valid ranges
+    if (!coords || coords.length !== 2) {
+      return res.status(400).json({ message: 'Invalid location coordinates' });
+    }
+    const [lonNum, latNum] = coords.map(v => Number(v));
+    const valid =
+      Number.isFinite(lonNum) && Number.isFinite(latNum) &&
+      lonNum >= -180 && lonNum <= 180 &&
+      latNum >= -90 && latNum <= 90;
+    if (!valid) {
       return res.status(400).json({ message: 'Invalid location coordinates' });
     }
 
@@ -66,6 +91,24 @@ export const registerParkingSpace = async (req, res) => {
       }
     }
 
+    // Normalize amenities: accept JSON string, CSV string, or array
+    let amenitiesParsed = amenities;
+    if (typeof amenities === 'string') {
+      if (amenities.trim().startsWith('[')) {
+        try {
+          amenitiesParsed = JSON.parse(amenities);
+        } catch {
+          amenitiesParsed = [];
+        }
+      } else {
+        amenitiesParsed = amenities
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean);
+      }
+    }
+    if (!Array.isArray(amenitiesParsed)) amenitiesParsed = [];
+
     // Create new ParkingSpace
     const parkingSpace = new ParkingSpace({
       owner: req.user._id,
@@ -73,17 +116,14 @@ export const registerParkingSpace = async (req, res) => {
       description,
       location: {
         type: 'Point',
-        coordinates: [
-          locationParsed.coordinates[0],
-          locationParsed.coordinates[1],
-        ],
+        coordinates: [lonNum, latNum],
       },
       address: addressParsed,
       pricePerHour,
       priceParking,
       availableSpots,
       availability: availabilityParsed,
-      amenities,
+      amenities: amenitiesParsed,
       photos,
     });
 
@@ -100,7 +140,6 @@ export const registerParkingSpace = async (req, res) => {
       .json({ message: 'Failed to register parking space', error: error.message });
   }
 };
-
 
 export const getParkingSpaceAvailability = async (req, res) => {
   const { spaceId } = req.params; // Get spaceId from URL parameters
@@ -133,7 +172,6 @@ export const getParkingSpaceAvailability = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch availability', error: error.message });
   }
 };
-
 
 export const updateParkingSpace = async (req, res) => {
   try {
@@ -178,7 +216,6 @@ export const deleteParkingSpace = async (req, res) => {
     res.status(500).json({ message: 'Failed to delete parking space' });
   }
 };
-
 
 export const getParkingSpaces = async (req, res) => {
   try {
