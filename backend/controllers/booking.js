@@ -45,11 +45,127 @@ import ParkFinderSecondUser from '../models/User.js'
 //   }
 // };
 
+// export const createBooking = async (req, res) => {
+//   try {
+//     const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+
+//     console.log('Extracted values:', {
+//       parkingSpaceId,
+//       startTime,
+//       endTime,
+//       vehicleNumber,
+//       vehicleType,
+//       vehicleModel,
+//       contactNumber,
+//       chassisNumber
+//     });
+
+//     // Step 1: Find the parking space and ensure pricePerHour is available
+//     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
+//     if (!parkingSpace) {
+//       return res.status(404).json({ message: 'Parking space not found' });
+//     }
+
+//     const { pricePerHour, availability, providerId } = parkingSpace;
+
+//     if (!startTime || !endTime || !pricePerHour) {
+//       return res.status(400).json({ message: "Invalid data for price calculation" });
+//     }
+
+//     // Step 2: Check availability of the parking space during the selected time slot
+//     const isSlotBooked = availability.some(dateObj => {
+//       // Iterate over each date's slots
+//       return dateObj.slots.some(slot => {
+//         const slotStart = new Date(slot.startTime);
+//         const slotEnd = new Date(slot.endTime);
+//         const requestedStart = new Date(startTime);
+//         const requestedEnd = new Date(endTime);
+
+//         // Check if the requested time overlaps with an existing booked slot
+//         return (
+//           (requestedStart >= slotStart && requestedStart < slotEnd) || 
+//           (requestedEnd > slotStart && requestedEnd <= slotEnd) || 
+//           (requestedStart <= slotStart && requestedEnd >= slotEnd)
+//         ) && slot.isBooked;
+//       });
+//     });
+
+//     if (isSlotBooked) {
+//       return res.status(400).json({ message: 'Selected time slot is already booked' });
+//     }
+
+//     // Step 3: Calculate the total price based on duration and price per hour
+//     const duration = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60); // Duration in hours
+//     const totalPrice = duration * pricePerHour;
+
+//     // Step 4: Create the booking entry
+//     const booking = new Booking({
+//       user: req.user._id,
+//       parkingSpace: parkingSpaceId,
+//       startTime,
+//       endTime,
+//       totalPrice,
+//       pricePerHour,
+//       vehicleNumber,
+//       vehicleType,
+//       vehicleModel,
+//       contactNumber,
+//       chassisNumber,
+//       providerId, // Use the providerId from parkingSpace
+//       status: 'confirmed',  // Default status
+//     });
+
+//     await booking.save();
+
+//     // Step 5: Update the parking space availability
+//     const updatedParkingSpace = await ParkingSpace.findByIdAndUpdate(parkingSpaceId, {
+//       $set: {
+//         'availability.$[dateElem].slots.$[slotElem].isBooked': true,  // Update the isBooked field of the matched slot
+//       }
+//     }, {
+//       arrayFilters: [
+//         { 'dateElem.date': { $eq: new Date(startTime).setHours(0, 0, 0, 0) } },  // Match the exact date (ignoring time)
+//         { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }  // Match the start and end times
+//       ],
+//       new: true,  // Returns the updated document
+//     });
+
+//     if (!updatedParkingSpace) {
+//       return res.status(500).json({ message: 'Failed to update parking space availability' });
+//     }
+
+//     // Step 6: Notify the provider (send a message/email, etc.)
+//     const provider = await ParkFinderSecondUser.findById(providerId); // Use the providerId here
+//     if (provider) {
+//       sendNotification(provider.email, 'New Booking Received', `You have a new booking for parking space: ${parkingSpaceId} from ${startTime} to ${endTime}.`);
+//     }
+
+//     // Step 7: Respond with the booking details
+//     res.status(201).json({ message: 'Booking created successfully!', booking });
+//   } catch (error) {
+//     console.error('Error creating booking:', error);
+//     res.status(500).json({ message: 'Failed to create booking' });
+//   }
+// };
+
+
+
+// controllers/booking.js (replace createBooking)
 export const createBooking = async (req, res) => {
   try {
-    const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+    // Only extract trusted fields (ignore any client-provided `status`)
+    const {
+      parkingSpaceId,
+      startTime,
+      endTime,
+      vehicleNumber,
+      vehicleType,
+      vehicleModel,
+      contactNumber,
+      chassisNumber
+    } = req.body;
 
-    console.log('Extracted values:', {
+    console.log('Incoming createBooking req.body (sanitized):', {
       parkingSpaceId,
       startTime,
       endTime,
@@ -60,45 +176,48 @@ export const createBooking = async (req, res) => {
       chassisNumber
     });
 
-    // Step 1: Find the parking space and ensure pricePerHour is available
+    // validate minimal input
+    if (!parkingSpaceId || !startTime || !endTime) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    // find parking space and required data
     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
     if (!parkingSpace) {
       return res.status(404).json({ message: 'Parking space not found' });
     }
 
     const { pricePerHour, availability, providerId } = parkingSpace;
-
-    if (!startTime || !endTime || !pricePerHour) {
-      return res.status(400).json({ message: "Invalid data for price calculation" });
+    if (!pricePerHour) {
+      return res.status(400).json({ message: 'Parking space has no pricePerHour' });
     }
 
-    // Step 2: Check availability of the parking space during the selected time slot
-    const isSlotBooked = availability.some(dateObj => {
-      // Iterate over each date's slots
-      return dateObj.slots.some(slot => {
+    // check for overlapping booked slot (your existing logic)
+    const isSlotBooked = Array.isArray(availability) && availability.some(dateObj =>
+      Array.isArray(dateObj.slots) && dateObj.slots.some(slot => {
         const slotStart = new Date(slot.startTime);
         const slotEnd = new Date(slot.endTime);
         const requestedStart = new Date(startTime);
         const requestedEnd = new Date(endTime);
-
-        // Check if the requested time overlaps with an existing booked slot
         return (
-          (requestedStart >= slotStart && requestedStart < slotEnd) || 
-          (requestedEnd > slotStart && requestedEnd <= slotEnd) || 
-          (requestedStart <= slotStart && requestedEnd >= slotEnd)
-        ) && slot.isBooked;
-      });
-    });
+          (
+            (requestedStart >= slotStart && requestedStart < slotEnd) ||
+            (requestedEnd > slotStart && requestedEnd <= slotEnd) ||
+            (requestedStart <= slotStart && requestedEnd >= slotEnd)
+          ) && slot.isBooked
+        );
+      })
+    );
 
     if (isSlotBooked) {
       return res.status(400).json({ message: 'Selected time slot is already booked' });
     }
 
-    // Step 3: Calculate the total price based on duration and price per hour
-    const duration = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60); // Duration in hours
-    const totalPrice = duration * pricePerHour;
+    // compute price
+    const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
+    const totalPrice = durationHours * pricePerHour;
 
-    // Step 4: Create the booking entry
+    // create booking - server enforces status = 'confirmed'
     const booking = new Booking({
       user: req.user._id,
       parkingSpace: parkingSpaceId,
@@ -111,37 +230,52 @@ export const createBooking = async (req, res) => {
       vehicleModel,
       contactNumber,
       chassisNumber,
-      providerId, // Use the providerId from parkingSpace
-      status: 'pending',  // Default status
+      providerId,
+      status: 'confirmed', // <- enforced by server
+      paymentStatus: 'pending'
     });
+
+    console.log('Booking to save:', booking);
 
     await booking.save();
 
-    // Step 5: Update the parking space availability
-    const updatedParkingSpace = await ParkingSpace.findByIdAndUpdate(parkingSpaceId, {
-      $set: {
-        'availability.$[dateElem].slots.$[slotElem].isBooked': true,  // Update the isBooked field of the matched slot
+    console.log('Booking saved (from DB):', booking);
+
+    // update parking space availability (your existing arrayFilters logic)
+    const updatedParkingSpace = await ParkingSpace.findByIdAndUpdate(
+      parkingSpaceId,
+      {
+        $set: {
+          'availability.$[dateElem].slots.$[slotElem].isBooked': true,
+        }
+      },
+      {
+        arrayFilters: [
+          { 'dateElem.date': { $eq: new Date(startTime).setHours(0,0,0,0) } },
+          { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }
+        ],
+        new: true
       }
-    }, {
-      arrayFilters: [
-        { 'dateElem.date': { $eq: new Date(startTime).setHours(0, 0, 0, 0) } },  // Match the exact date (ignoring time)
-        { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }  // Match the start and end times
-      ],
-      new: true,  // Returns the updated document
-    });
+    );
 
     if (!updatedParkingSpace) {
-      return res.status(500).json({ message: 'Failed to update parking space availability' });
+      console.warn('Failed to update parking space availability (not fatal).');
     }
 
-    // Step 6: Notify the provider (send a message/email, etc.)
-    const provider = await ParkFinderSecondUser.findById(providerId); // Use the providerId here
+    // notify provider (optional)
+    const provider = await ParkFinderSecondUser.findById(providerId);
     if (provider) {
-      sendNotification(provider.email, 'New Booking Received', `You have a new booking for parking space: ${parkingSpaceId} from ${startTime} to ${endTime}.`);
+      // ensure sendNotification is defined in scope
+      try {
+        sendNotification(provider.email, 'New Booking Received', `Booking for ${parkingSpaceId} from ${startTime} to ${endTime}`);
+      } catch (e) {
+        console.warn('Notification failed:', e);
+      }
     }
 
-    // Step 7: Respond with the booking details
-    res.status(201).json({ message: 'Booking created successfully!', booking });
+    // return the saved booking (populated if you like)
+    const fresh = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+    res.status(201).json({ message: 'Booking created successfully!', booking: fresh });
   } catch (error) {
     console.error('Error creating booking:', error);
     res.status(500).json({ message: 'Failed to create booking' });
