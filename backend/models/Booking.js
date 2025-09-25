@@ -40,10 +40,10 @@ const bookingSchema = new mongoose.Schema({
   chassisNumber: String,
   drivingLicenseUrl: String,
   status: {
-    type: String,
-    enum: ['pending', 'accepted', 'rejected', 'confirmed', 'active', 'completed', 'cancelled'],
-    default: 'confirmed',
-  },
+  type: String,
+  enum: ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled'],
+  default: 'confirmed', // 👈 now confirmed by default
+},
   paymentStatus: {
     type: String,
     enum: ['pending', 'paid', 'refunded', 'failed'],

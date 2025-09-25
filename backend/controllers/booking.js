@@ -64,7 +64,17 @@ cleanupOverdueBookings().catch((e) => console.error(e));
  */
 export const createBooking = async (req, res) => {
   try {
-    const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+    // Only extract trusted fields (ignore any client-provided `status`)
+    const {
+      parkingSpaceId,
+      startTime,
+      endTime,
+      vehicleNumber,
+      vehicleType,
+      vehicleModel,
+      contactNumber,
+      chassisNumber
+    } = req.body;
 
     // Step 1: Find the parking space and ensure pricePerHour is available
     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
@@ -105,7 +115,7 @@ export const createBooking = async (req, res) => {
     const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
     const totalPrice = durationHours * pricePerHour;
 
-    // Step 4: Create the booking entry
+    // create booking - server enforces status = 'confirmed'
     const booking = new Booking({
       user: req.user._id,
       parkingSpace: parkingSpaceId,
@@ -119,9 +129,11 @@ export const createBooking = async (req, res) => {
       contactNumber,
       chassisNumber,
       providerId,
-      status: 'pending',
-      paymentStatus: 'pending',
+      status: 'confirmed', // <- enforced by server
+      paymentStatus: 'pending'
     });
+
+    console.log('Booking to save:', booking);
 
     await booking.save();
 

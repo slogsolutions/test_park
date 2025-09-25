@@ -22,9 +22,10 @@ import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 
-// 🔹 Make prop optional so <Front /> works without passing it
+// Updated props: accept both onLocationSelect (for selected place) and onProceed (no-arg — flip to Home)
 interface LocationSearchBoxProps {
   onLocationSelect?: (location: GeocodingResult) => void;
+  onProceed?: () => void;
 }
 
 interface ParkingArea extends GeocodingResult {
@@ -130,7 +131,7 @@ const featuredImages = [
   { url: `${image9}`, title: 'Scenic Views' }
 ];
 
-const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
+const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -167,6 +168,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
         }
       );
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -207,7 +209,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
       toast.error('Failed to fetch parking spaces for the selected location.');
     }
 
-    // 🔹 Call prop safely if provided
+    // still call the consumer-supplied location handler if provided
     onLocationSelect?.(result);
   };
 
@@ -239,7 +241,14 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect }) => {
     <div className="w-full pb-28 mt-5 max-w-2xl mx-auto px-4 py-4">
       {/* Header */}
       <div className="flex items-center gap-2 mb-4">
-        <SearchBar onOpen={() => setIsSearchOpen(true)} />
+        {/* When SearchBar is clicked: open overlay AND call onProceed so parent can show Home */}
+        <SearchBar
+          onOpen={() => {
+            setIsSearchOpen(true);
+            // request parent to proceed to Home (if provided)
+            onProceed?.();
+          }}
+        />
       </div>
 
       {/* Search Section */}

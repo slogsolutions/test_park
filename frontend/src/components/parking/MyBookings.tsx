@@ -211,11 +211,20 @@ const MyBookings: React.FC = () => {
                   <span className="ml-2">{new Date(booking.endTime).toLocaleString()}</span>
                 </li>
                 <li className="flex items-center">
+<<<<<<< HEAD
                   {booking.status === "accepted" ? (
                     <>
                       <FaCheckCircle className="mr-2 text-green-500" />
                       <span>Status: </span>
                       <span className="text-green-600 font-semibold ml-2">Approved</span>
+=======
+                  {/* ✅ Status with clear icon & color */}
+                  {booking.status === "confirmed" ? (
+                    <>
+                      <FaCheckCircle className="mr-2 text-green-500" />
+                      <span>Status: </span>
+                      <span className="text-green-600 font-semibold">Confirmed</span>
+>>>>>>> 423170670c12a2d18959a106047d548ef7980b44
                     </>
                   ) : booking.status === "rejected" ? (
                     <>
@@ -253,10 +262,10 @@ const MyBookings: React.FC = () => {
                     <span className="ml-2">Cancel</span>
                   </button>
                 )}
-                {booking.paymentStatus === "pending" && booking.status === "accepted" && (
+                {booking.paymentStatus === "pending" && booking.status === "confirmed" && (
                   <button
                     onClick={() => handlePayNow(booking._id, Math.ceil(booking.totalPrice))}
-                    className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-red-600 transition duration-300 transform hover:scale-105"
+                    className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
                   >
                     <FaCreditCard className="text-xl" />
                     <span className="ml-2">Pay Now</span>
