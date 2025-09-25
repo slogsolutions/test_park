@@ -2,48 +2,7 @@ import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js'
-// export const createBooking = async (req, res) => {
-//   try {
-//     const { parkingSpaceId, startTime, endTime } = req.body;
 
-//     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
-//     if (!parkingSpace) {
-//       console.log(parkingSpaceId);
-      
-//       return res.status(404).json({ message: 'Parking space not found' });
-//     }
-
-//     // Calculate total price based on duration and price per hour
-//     const duration = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60); // hours
-//     const totalPrice = duration * parkingSpace.pricePerHour;
-
-//     const booking = new Booking({
-//       user: req.user._id,
-//       parkingSpace: parkingSpaceId,
-//       startTime,
-//       endTime,
-//       totalPrice,
-//     });
-
-//     await booking.save();
-
-//     // Update parking space availability
-//     // This is a simplified version - in production, you'd want to handle conflicts
-//     await ParkingSpace.findByIdAndUpdate(parkingSpaceId, {
-//       $push: {
-//         'availability.$[].slots': {
-//           startTime,
-//           endTime,
-//           isBooked: true,
-//         },
-//       },
-//     });
-
-//     res.status(201).json(booking);
-//   } catch (error) {
-//     res.status(500).json({ message: 'Failed to create booking' });
-//   }
-// };
 
 // export const createBooking = async (req, res) => {
 //   try {

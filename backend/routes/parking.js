@@ -24,8 +24,15 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({
+// accept only images; prevents Multer errors that can drop body fields
+const fileFilter = (req, file, cb) => {
+  if (/^image\//.test(file.mimetype)) return cb(null, true);
+  return cb(new Error('Only image uploads are allowed'));
+};
+
+export const upload = multer({
   storage,
+  fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 

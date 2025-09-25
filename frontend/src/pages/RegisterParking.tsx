@@ -165,26 +165,24 @@ export default function RegisterParking() {
       data.append('pricePerHour', String(formData.pricePerHour));
       data.append('priceParking', String(formData.priceParking));
       data.append('availableSpots', String(formData.availableSpots));
-      // CHANGED: send amenities as one JSON string so backend can parse from multipart
-      data.append('amenities', JSON.stringify(formData.amenities));
+      // send amenities as one JSON string
+      data.set('amenities', JSON.stringify(formData.amenities));
+      // attach photos under the field name "photos"
       Array.from(formData.photos).forEach((file) => data.append('photos', file));
 
-      // Append location both as GeoJSON string and as simple lat/lng fields (server-side tolerant)
+      // Append coordinates deterministically (set avoids duplicate/missing values)
       const locationObj = { type: 'Point', coordinates: [lon, lat] };
-      data.append('location', JSON.stringify(locationObj));
-      // also add individual fields in case backend expects them
-      data.append('lng', String(lon));
-      data.append('lat', String(lat));
+      data.set('location', JSON.stringify(locationObj));
+      data.set('lng', String(lon));
+      data.set('lat', String(lat));
 
       // DEBUG: print entries
       for (const pair of data.entries()) {
-        // avoid printing file binary in console; show file names for File objects
         const val = pair[1] instanceof File ? (pair[1] as File).name : pair[1];
-        // eslint-disable-next-line no-console
         console.log('FormData entry:', pair[0], val);
       }
 
-      await parkingService.registerSpace(data); // existing service that posts FormData
+      await parkingService.registerSpace(data);
       toast.success('Parking space registered successfully!');
       navigate('/');
     } catch (err: any) {
