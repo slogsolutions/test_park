@@ -211,20 +211,12 @@ const MyBookings: React.FC = () => {
                   <span className="ml-2">{new Date(booking.endTime).toLocaleString()}</span>
                 </li>
                 <li className="flex items-center">
-<<<<<<< HEAD
-                  {booking.status === "accepted" ? (
-                    <>
-                      <FaCheckCircle className="mr-2 text-green-500" />
-                      <span>Status: </span>
-                      <span className="text-green-600 font-semibold ml-2">Approved</span>
-=======
                   {/* ✅ Status with clear icon & color */}
                   {booking.status === "confirmed" ? (
                     <>
                       <FaCheckCircle className="mr-2 text-green-500" />
                       <span>Status: </span>
                       <span className="text-green-600 font-semibold">Confirmed</span>
->>>>>>> 423170670c12a2d18959a106047d548ef7980b44
                     </>
                   ) : booking.status === "rejected" ? (
                     <>

@@ -3,15 +3,12 @@ import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js';
-<<<<<<< HEAD
-=======
 
 // Helper function for sending notifications (placeholder)
 const sendNotification = (email, subject, message) => {
   console.log(`Notification sent to ${email}: ${subject} - ${message}`);
   // Implement your notification logic here (email, SMS, push, etc.)
 };
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 
 // In-memory timers map (best-effort; not durable across restarts)
 const bookingTimers = new Map();
@@ -67,9 +64,6 @@ cleanupOverdueBookings().catch((e) => console.error(e));
  */
 export const createBooking = async (req, res) => {
   try {
-<<<<<<< HEAD
-    const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber, payment } = req.body;
-=======
     // Only extract trusted fields (ignore any client-provided `status`)
     const {
       parkingSpaceId,
@@ -81,7 +75,6 @@ export const createBooking = async (req, res) => {
       contactNumber,
       chassisNumber
     } = req.body;
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 
     // Step 1: Find the parking space and ensure pricePerHour is available
     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
@@ -89,30 +82,18 @@ export const createBooking = async (req, res) => {
       return res.status(404).json({ message: 'Parking space not found' });
     }
 
-<<<<<<< HEAD
-    // prefer owner field (common naming)
-    const { pricePerHour, availability } = parkingSpace;
-    const providerId = parkingSpace.owner || parkingSpace.providerId || null;
-=======
     const { pricePerHour, availability, owner: providerId } = parkingSpace;
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 
     if (!startTime || !endTime || !pricePerHour) {
       return res.status(400).json({ message: "Invalid data for price calculation" });
     }
 
     // Step 2: Check availability of the parking space during the selected time slot
-<<<<<<< HEAD
-    const isSlotBooked = availability && availability.some(dateObj => {
-      // Iterate over each date's slots
-      return dateObj.slots.some(slot => {
-=======
     const requestedStart = new Date(startTime);
     const requestedEnd = new Date(endTime);
 
     const isSlotBooked = (availability || []).some(dateObj => {
       return (dateObj.slots || []).some(slot => {
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
         const slotStart = new Date(slot.startTime);
         const slotEnd = new Date(slot.endTime);
 
@@ -147,15 +128,9 @@ export const createBooking = async (req, res) => {
       vehicleModel,
       contactNumber,
       chassisNumber,
-<<<<<<< HEAD
-      providerId, // Ensure providerId is stored (owner of the space)
-      status: 'pending',  // Default status
-      payment: payment || undefined,
-=======
       providerId,
       status: 'confirmed', // <- enforced by server
       paymentStatus: 'pending'
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
     });
 
     console.log('Booking to save:', booking);
@@ -190,18 +165,6 @@ export const createBooking = async (req, res) => {
       console.error('Failed to mark slot booked', err);
     }
 
-<<<<<<< HEAD
-    // Step 6: Notify the provider (send a message/email, etc.)
-    const provider = providerId ? await ParkFinderSecondUser.findById(providerId) : null; // Use the providerId here
-    if (provider) {
-      // sendNotification is referenced in your original file; if not defined, this will throw — keep as-is per your codebase.
-      if (typeof sendNotification === 'function') {
-        sendNotification(provider.email, 'New Booking Received', `You have a new booking for parking space: ${parkingSpaceId} from ${startTime} to ${endTime}.`);
-      } else {
-        // fallback: console log so we don't crash
-        console.log(`New booking for provider ${provider.email} for space ${parkingSpaceId}`);
-      }
-=======
     // Step 6: Notify the provider
     try {
       const provider = await ParkFinderSecondUser.findById(providerId);
@@ -211,7 +174,6 @@ export const createBooking = async (req, res) => {
     } catch (err) {
       // non-fatal
       console.warn('Failed to notify provider', err);
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
     }
 
     res.status(201).json({ message: 'Booking created successfully!', booking });
@@ -221,12 +183,9 @@ export const createBooking = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 /**
  * Get bookings for current user
  */
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 export const getMyBookings = async (req, res) => {
   try {
     const bookings = await Booking.find({ user: req.user._id })
@@ -235,12 +194,6 @@ export const getMyBookings = async (req, res) => {
     res.json(bookings);
   } catch (error) {
     console.log(error);
-<<<<<<< HEAD
-    res.status(500).json({ message: 'Failed to get bookings', e:error });
-  }
-};
-
-=======
     res.status(500).json({ message: 'Failed to get bookings', e: error });
   }
 };
@@ -249,19 +202,13 @@ export const getMyBookings = async (req, res) => {
  * Update booking status (accept/reject etc.)
  * Also sets providerId when accepted.
  */
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 export const updateBookingStatus = async (req, res) => {
   try {
     console.log("Received PUT request at:", req.originalUrl);
     const { status } = req.body;
     const bookingId = req.params.id;
 
-<<<<<<< HEAD
-    // Validate status (include 'paid' so payment endpoint can set it)
-    const allowedStatuses = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled', 'paid'];
-=======
     const allowedStatuses = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled'];
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 
     if (!allowedStatuses.includes(status)) {
       console.log("invalid status");
@@ -354,12 +301,9 @@ export const updateBookingStatus = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 /**
  * Get booking by id (with auth)
  */
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 export const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id).populate('parkingSpace');
@@ -381,12 +325,9 @@ export const getBookingById = async (req, res) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 /**
  * Delete booking by id
  */
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
 export const deleteById = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -406,13 +347,8 @@ export const getProviderBookings = async (req, res) => {
     const providerId = req.user._id;
     console.log('Provider ID:', providerId);
 
-<<<<<<< HEAD
-    // Find all parking spaces associated with this provider
-    const parkingSpaces = await ParkingSpace.find({ owner: providerId });
-=======
     const providerIdObject = new mongoose.Types.ObjectId(providerId);
     const parkingSpaces = await ParkingSpace.find({ owner: providerIdObject });
->>>>>>> fe800f83e4bb831cc727ae56acad0ef9fa6d372a
     console.log('Parking Spaces:', parkingSpaces);
 
     if (!parkingSpaces.length) {
