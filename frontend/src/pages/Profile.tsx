@@ -2,6 +2,9 @@
 import React, { useEffect, useMemo, useState, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Loader from "./LoadingScreen";
+import { useRole } from "../context/RoleContext";
+import { useAuth } from "../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 // Lazy-load ProviderSpaces only used for seller view
 const LazyProviderSpaces = React.lazy(() => import("../components/dashboard/ProviderSpaces"));
@@ -43,6 +46,7 @@ interface UserProfile {
     status?: string; // 'done'|'pending' etc.
     verified?: boolean;
   };
+  kycStatus?: string; // backend canonical field sometimes
 }
 
 const floatVariants = {
@@ -84,6 +88,15 @@ export default function Profile() {
   // determine base url
   const API_BASE = import.meta.env.VITE_BASE_URL || "";
 
+  // Role from RoleContext (toggled by Navbar)
+  const { role: uiRole } = useRole();
+
+  // navigation for Edit Profile button
+  const navigate = useNavigate();
+
+  // keep useAuth import for future refresh/setUser usage (not used here but available)
+  const _auth = useAuth?.();
+
   useEffect(() => {
     let mounted = true;
 
@@ -111,13 +124,15 @@ export default function Profile() {
         if (!mounted) return;
         setProfile(data);
 
-        // detect role: seller if any of these flags present
-        const isSeller =
+        // detect role: seller if any of these flags present OR if UI toggled to seller
+        const roleFromProfile =
           data?.role === "seller" || data?.isSeller === true || data?.seller === true || data?.type === "seller";
+
+        const isSeller = uiRole === "seller" ? true : roleFromProfile;
 
         // bookings: prefer profile.bookings length, otherwise fetch counts
         if (!data?.bookings) {
-          // fetch bookings according to role
+          // fetch bookings according to role (respect UI toggle: if user toggled to seller, fetch provider bookings)
           if (isSeller) {
             try {
               const bRes = await fetch(`${API_BASE}/api/booking/provider-bookings`, {
@@ -186,8 +201,10 @@ export default function Profile() {
               0;
             if (mounted) setSpacesCountFetched(derived);
           }
+        } else {
+          // If buyer, clear spaces count (avoid stale seller counts showing for buyers)
+          if (mounted) setSpacesCountFetched(0);
         }
-
       } catch (err: any) {
         console.error("Profile load error:", err);
         if (mounted) setError(err?.message || "Failed to load profile.");
@@ -200,18 +217,22 @@ export default function Profile() {
     return () => {
       mounted = false;
     };
-  }, [API_BASE]);
+    // Include uiRole so re-fetch runs immediately when user toggles buyer/seller in UI
+  }, [API_BASE, uiRole]);
 
-  // detect role (buyer vs seller) from profile
-  const isSeller = useMemo(() => {
-    if (!profile) return false;
-    return (
-      profile.role === "seller" ||
-      profile.isSeller === true ||
-      profile.seller === true ||
-      profile.type === "seller"
-    );
-  }, [profile]);
+  // Effective role: prioritize UI toggle (role context) so the page updates immediately.
+  // fallback to server-side profile.role if toggle unknown
+  const effectiveRole = useMemo(() => {
+    if (uiRole === "seller") return "seller";
+    if (uiRole === "buyer") return "buyer";
+    if (!profile) return "buyer";
+    return profile?.role === "seller" || profile?.isSeller === true || profile?.seller === true || profile?.type === "seller"
+      ? "seller"
+      : "buyer";
+  }, [uiRole, profile]);
+
+  // detect role (buyer vs seller) from effectiveRole
+  const isSeller = useMemo(() => effectiveRole === "seller", [effectiveRole]);
 
   // Determine counts (prefer fetched counts, fallback to profile fields)
   const bookingsCount = useMemo(() => {
@@ -228,10 +249,17 @@ export default function Profile() {
     return 0;
   }, [spacesCountFetched, profile]);
 
-  // show bookings stat on left only if KYC status is 'done' or 'pending'
+  // show bookings stat on left only if KYC status is 'approved'/'done' or 'pending'
   const kycShowsBookings = useMemo(() => {
-    const s = (profile?.kycData?.status || "").toString().toLowerCase();
-    return s === "done" || s === "pending";
+    const raw =
+      (profile?.kycStatus ||
+        profile?.kycData?.status ||
+        (profile?.kycData?.verified ? "approved" : "") ||
+        ""
+      )
+        .toString()
+        .toLowerCase();
+    return raw === "done" || raw === "approved" || raw === "pending" || raw === "verified";
   }, [profile]);
 
   // rating for sellers only
@@ -268,6 +296,18 @@ export default function Profile() {
   if (!profile) {
     return <div className="p-6 text-center">No profile data available.</div>;
   }
+
+  // helper: derive normalized KYC display
+  const kycRaw =
+    (profile?.kycStatus || profile?.kycData?.status || (profile?.kycData?.verified ? "approved" : "") || "")
+      .toString()
+      .toLowerCase();
+
+  const kycDisplay = kycRaw === "approved" || kycRaw === "verified" || kycRaw === "done"
+    ? { text: "verified", className: "text-green-600" }
+    : kycRaw === "pending"
+      ? { text: "pending", className: "text-yellow-600" }
+      : { text: "not done", className: "text-gray-400" };
 
   return (
     <div className="min-h-screen pb-20 bg-gray-50 relative overflow-hidden">
@@ -310,8 +350,12 @@ export default function Profile() {
             <motion.button whileTap={{ scale: 0.95 }} whileHover={{ scale: 1.03 }} className="px-4 py-2 rounded-full bg-white border shadow-sm text-sm" onClick={() => location.reload()}>
               Refresh
             </motion.button>
-            {/* Edit Profile button kept (you said edit profile not working; keep it here) */}
-            <motion.button whileHover={{ scale: 1.02 }} className="px-4 py-2 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold shadow-lg">
+            {/* Edit Profile button now navigates to /edit-profile (implement page separately) */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold shadow-lg"
+              onClick={() => navigate("/edit-profile")}
+            >
               Edit Profile
             </motion.button>
           </div>
@@ -339,7 +383,7 @@ export default function Profile() {
               </motion.p>
 
               <div className="mt-6 w-full grid grid-cols-3 gap-3">
-                {/* Bookings: show only if KYC status done or pending, else show blank */}
+                {/* Bookings: show only if KYC status done/pending/verified, else show blank */}
                 <div className="flex flex-col items-center p-3 bg-white/50 rounded-lg">
                   <div className="text-lg font-bold text-gray-800">{kycShowsBookings ? bookingsCountAnim : "-"}</div>
                   <div className="text-xs text-gray-500">Bookings</div>
@@ -364,11 +408,9 @@ export default function Profile() {
 
               {/* Removed Message / Follow buttons per request */}
               <div className="mt-6 w-full flex gap-3 justify-center">
-                {/* optionally show KYC status */}
+                {/* KYC status display using normalized logic */}
                 <div className="text-sm text-gray-500">
-                  KYC: <span className={`font-medium ${((profile?.kycData?.status || "").toLowerCase() === "done") ? "text-green-600" : ((profile?.kycData?.status || "").toLowerCase() === "pending" ? "text-yellow-600" : "text-gray-400")}`}>
-                    {profile?.kycData?.status ? profile.kycData.status : (profile?.kycData?.verified ? "done" : "not done")}
-                  </span>
+                  KYC: <span className={`font-medium ${kycDisplay.className}`}>{kycDisplay.text}</span>
                 </div>
               </div>
             </div>

@@ -264,3 +264,47 @@ export const getMe = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
+
+/**
+ * Update profile controller
+ * PATCH /api/auth/me
+ * Allows updating only safe fields: name, bio, kycData (phoneNumber, address, city, country)
+ * Does NOT allow updating role, kycStatus, isAdmin, or other privileged fields.
+ */
+export const updateProfile = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const { name, bio, kycData } = req.body;
+
+    if (typeof name === "string") user.name = name.trim();
+    if (typeof bio === "string") user.bio = bio.trim();
+
+    if (kycData && typeof kycData === "object") {
+      user.kycData = user.kycData || {};
+      if (typeof kycData.phoneNumber === "string") user.kycData.phoneNumber = kycData.phoneNumber;
+      if (typeof kycData.address === "string") user.kycData.address = kycData.address;
+      if (typeof kycData.city === "string") user.kycData.city = kycData.city;
+      if (typeof kycData.country === "string") user.kycData.country = kycData.country;
+      // IMPORTANT: Do NOT allow clients to set kycStatus/approved directly here.
+    }
+
+    const updated = await user.save();
+
+    const out = updated.toObject ? updated.toObject() : updated;
+    if (out.password) delete out.password;
+
+    res.json(out);
+  } catch (error) {
+    console.error("updateProfile error:", error);
+    res.status(500).json({ message: "Could not update profile" });
+  }
+};
