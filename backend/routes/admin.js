@@ -206,18 +206,24 @@ router.get("/users", protect, adminOnly, async (req, res) => {
   }
 });
 
-router.put("/users/:id", protect, adminOnly, async (req, res) => {
+// inside admin.js
+router.patch("/users/:id/verify", protect, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
-    const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
+    const { isVerified, kycStatus } = req.body;
+    const updateData = {};
+    if (isVerified !== undefined) updateData.isVerified = isVerified;
+    if (kycStatus !== undefined) updateData.kycStatus = kycStatus;
+
+    const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true }).select('-password');
     if (!user) return res.status(404).json({ error: "User not found" });
-    res.json({ user });
+    return res.json({ user });
   } catch (err) {
-    console.error("Error updating user:", err);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    return res.status(500).json({ error: err.message });
   }
 });
+
 
 router.patch("/users/:id/verify", protect, adminOnly, async (req, res) => {
   try {

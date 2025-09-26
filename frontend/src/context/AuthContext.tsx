@@ -79,6 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem('token');
       if (token) {
         try {
+          // ✅ Always fetch fresh user from backend
           const user = await authService.getMe();
           dispatch({ type: 'LOGIN_SUCCESS', payload: user });
         } catch (error) {
@@ -96,7 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await authService.login(email, password);
       localStorage.setItem('token', data.token);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: data.user });
+
+      // ✅ Re-fetch latest user to ensure kycStatus is up-to-date
+      const freshUser = await authService.getMe();
+      dispatch({ type: 'LOGIN_SUCCESS', payload: freshUser });
     } catch (error: any) {
       const message = error.response?.data?.message || 'Login failed';
       dispatch({ type: 'LOGIN_FAIL', payload: message });
@@ -107,7 +111,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (name: string, email: string, password: string) => {
     try {
       const data = await authService.register(name, email, password);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: data.user });
+
+      // ✅ Ensure newly registered user state is fresh
+      const freshUser = await authService.getMe();
+      dispatch({ type: 'LOGIN_SUCCESS', payload: freshUser });
+
       return data;
     } catch (error: any) {
       const message = error.response?.data?.message || 'Registration failed';
@@ -120,7 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await authService.googleLogin(credential);
       localStorage.setItem('token', data.token);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: data.user });
+
+      // ✅ Refresh after Google login as well
+      const freshUser = await authService.getMe();
+      dispatch({ type: 'LOGIN_SUCCESS', payload: freshUser });
     } catch (error: any) {
       const message = error.response?.data?.message || 'Google login failed';
       dispatch({ type: 'LOGIN_FAIL', payload: message });
@@ -128,7 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async() => {
+  const logout = async () => {
     const token = localStorage.getItem("fcm_token");
     if (token) {
       await api.delete("/users/remove-token", { data: { fcmToken: token }} as any);
@@ -147,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ✅ Refresh user from server
+  // ✅ Refresh user from server (used after KYC submission/approval)
   const refreshUser = async () => {
     try {
       const token = localStorage.getItem('token');
