@@ -22,6 +22,7 @@ interface ParkingFormData {
   amenities: string[];
   photos: FileList | null;
   availability: { date: string; slots: { startTime: string; endTime: string; isBooked: boolean }[] }[];
+  discount: number; // NEW: percentage 0-100
 }
 
 const amenitiesOptions = ['covered', 'security', 'charging', 'cctv', 'wheelchair'];
@@ -49,6 +50,7 @@ export default function RegisterParking() {
     amenities: [],
     photos: null,
     availability: [],
+    discount: 0, // NEW initial value
   });
 
   const addAvailabilitySlot = () => {
@@ -145,6 +147,7 @@ export default function RegisterParking() {
           availability: formattedAvailability,
           amenities: formData.amenities,
           location: { type: 'Point', coordinates: [lon, lat] },
+          discount: Number(formData.discount), // NEW
         };
 
         console.log('Posting JSON payload to /api/parking:', payload);
@@ -169,6 +172,9 @@ export default function RegisterParking() {
       data.set('amenities', JSON.stringify(formData.amenities));
       // attach photos under the field name "photos"
       Array.from(formData.photos).forEach((file) => data.append('photos', file));
+
+      // set discount into formdata
+      data.set('discount', String(formData.discount)); // NEW
 
       // Append coordinates deterministically (set avoids duplicate/missing values)
       const locationObj = { type: 'Point', coordinates: [lon, lat] };
@@ -228,7 +234,7 @@ export default function RegisterParking() {
         setMarkerPosition({ latitude, longitude });
         setViewport({ ...viewport, latitude, longitude, zoom: 14 });
 
-        // reverse geocode to auto‑fill the address fields
+        // reverse geocode to auto-fill the address fields
         try {
           const loc = await reverseGeocode(latitude, longitude);
           setFormData((prev) => ({
@@ -336,6 +342,28 @@ export default function RegisterParking() {
                     }
                     placeholder="e.g. 50"
                   />
+                </div>
+
+                {/* Discount % (NEW) */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Discount (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
+                    value={formData.discount}
+                    onChange={(e) => {
+                      let v = parseFloat(e.target.value || '0');
+                      if (isNaN(v)) v = 0;
+                      if (v < 0) v = 0;
+                      if (v > 100) v = 100;
+                      setFormData({ ...formData, discount: v });
+                    }}
+                    placeholder="Enter discount percentage (e.g. 10 for 10%)"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Optional: discount percentage applied on price per hour</p>
                 </div>
               </div>
 

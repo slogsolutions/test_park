@@ -1,3 +1,5 @@
+// controllers/parking.js
+import mongoose from 'mongoose';
 import ParkingSpace from '../models/ParkingSpace.js';
 
 export const registerParkingSpace = async (req, res) => {
@@ -16,6 +18,7 @@ export const registerParkingSpace = async (req, res) => {
       availability,
       availableSpots,
       amenities,
+      discount, // <-- may be string (FormData) or number (JSON)
     } = req.body;
 
     // Parse address if sent as JSON string
@@ -109,6 +112,16 @@ export const registerParkingSpace = async (req, res) => {
     }
     if (!Array.isArray(amenitiesParsed)) amenitiesParsed = [];
 
+    // Parse discount safely
+    let discountNum = 0;
+    if (discount !== undefined && discount !== null) {
+      discountNum = Number(discount);
+      if (Number.isNaN(discountNum)) discountNum = 0;
+      // clamp to [0,100]
+      if (discountNum < 0) discountNum = 0;
+      if (discountNum > 100) discountNum = 100;
+    }
+
     // Create new ParkingSpace
     const parkingSpace = new ParkingSpace({
       owner: req.user._id,
@@ -125,6 +138,7 @@ export const registerParkingSpace = async (req, res) => {
       availability: availabilityParsed,
       amenities: amenitiesParsed,
       photos,
+      discount: discountNum, // NEW: save discount percentage
       // New keys default are handled in the Mongoose model (isOnline/isDeleted/deletedAt)
       // But if you want to explicitly set isOnline default here, you can add isOnline: false
     });
