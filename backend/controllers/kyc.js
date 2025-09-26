@@ -1,3 +1,4 @@
+// backend/controllers/kyc.js
 import User from '../models/User.js';
 
 export const submitKYC = async (req, res) => {
@@ -26,7 +27,7 @@ export const submitKYC = async (req, res) => {
 
     user.kycData = {
       fullName,
-      dateOfBirth: new Date(dateOfBirth),
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       address,
       city,
       state,
@@ -43,7 +44,6 @@ export const submitKYC = async (req, res) => {
     res.json({ message: 'KYC submitted successfully', status: 'submitted' });
   } catch (error) {
     console.log(error);
-    
     res.status(500).json({ message: 'Failed to submit KYC' });
   }
 };
@@ -66,7 +66,7 @@ export const getAllKYCSubmissions = async (req, res) => {
     // Only admin should access this
     const user = req.user;
     console.log(user.isAdmin);
-    
+
     if (!user.isAdmin) {
       return res.status(403).json({ error: 'Access denied' });
     }
@@ -80,65 +80,16 @@ export const getAllKYCSubmissions = async (req, res) => {
   }
 };
 
-// export const updateKYCStatus = async (req, res) => {
-//   try {
-//     // Only admin should access this
-//     const user = req.user; // Assumed to be populated with authentication
-//     // if (!user.isAdmin) {
-//     //   return res.status(403).json({ error: 'Access denied' });
-//     // }
-
-//     const { userId, kycStatus } = req.body; // userId and new kycStatus sent from the admin panel
-
-//     // Validate kycStatus
-//     if (!['pending', 'submitted', 'approved', 'rejected'].includes(kycStatus)) {
-//       return res.status(400).json({ error: 'Invalid KYC status' });
-//     }
-
-//     // Find the user and update the kycStatus
-//     const updatedUser = await User.findByIdAndUpdate(
-//       userId,
-//       { kycStatus },
-//       { new: true, runValidators: true }
-//     );
-
-//     // Check if the user exists
-//     if (!updatedUser) {
-//       return res.status(404).json({ error: 'User not found' });
-//     }
-
-//     // Send updated user data as response
-//     res.status(200).json({
-//       message: 'KYC status updated successfully',
-//       user: updatedUser,
-//     });
-//   } catch (error) {
-//     console.log(error);
-//     res.status(500).json({ error: 'Server error', message: error.message });
-//   }
-// };
-
-
 export const approveKYCSubmission = async (req, res) => {
   try {
-    const user = req.user; // Assumed to be populated with authentication
-    // if (!user.isAdmin) {
-    //   return res.status(403).json({ error: 'Access denied' });
-    // }
+    const { selectedKycId } = req.params;
 
-    const { selectedKycId } = req.params; // KYC ID from the URL
-
-    console.log(selectedKycId);
     // Find the user and update KYC status to 'approved'
     const updatedUser = await User.findByIdAndUpdate(
       selectedKycId,
       { kycStatus: 'approved' },
       { new: true, runValidators: true }
     );
-
-
-
-   
 
     if (!updatedUser) {
       return res.status(404).json({ error: 'User not found' });
@@ -153,4 +104,3 @@ export const approveKYCSubmission = async (req, res) => {
     res.status(500).json({ error: 'Server error', message: error.message });
   }
 };
-

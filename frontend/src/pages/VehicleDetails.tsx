@@ -124,6 +124,7 @@ export default function VehicleDetails() {
       vehicleModel: selectedVehicle.model,
       contactNumber: selectedVehicle.contactNumber,
       chassisNumber: selectedVehicle.chassisNumber,
+      status: 'confirmed',  // Default status
     };
 
     console.log('POST /api/booking payload:', payload);

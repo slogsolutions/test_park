@@ -37,6 +37,7 @@ import { buyerRoutes } from "./routes/BuyerRoutes";
 import { sellerRoutes } from "./routes/SellerRoutes";
 import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
 import { useState } from "react";
+import EditProfile from './pages/EditProfile';
 
 export default function App() {
 
@@ -113,7 +114,7 @@ function AppRoutes() {
         <Route path="/profileuser" element={<Profile />} />
         <Route path="/register-parking" element={<ProtectedRoute><RegisterParking /></ProtectedRoute>} />
         <Route path="/dashboard" element={<ProtectedRoute><Dash /></ProtectedRoute>} />
-
+        <Route path="/edit-profile" element={<ProtectedRoute><EditProfile /></ProtectedRoute>} />
         {/* Role-based routes — only include when user is present */}
         {user && role === "buyer" && buyerRoutes}
         {user && role === "seller" && sellerRoutes}

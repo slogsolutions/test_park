@@ -95,9 +95,18 @@ export default function Navbar() {
       ? "text-red-600 font-bold dark:text-red-400"
       : "text-gray-700 dark:text-gray-300";
 
-  // Only show KYC link if not already submitted/approved
-  const shouldShowKYC =
-    (user as any)?.kycStatus !== "submitted" && (user as any)?.kycStatus !== "approved";
+  // -------------------------
+  // Robust KYC visibility check
+  // - handles null/undefined
+  // - normalizes string casing
+  // - treats any non-string as "not approved" (safe default)
+  // Desired behaviour: hide KYC link once status is "submitted" or "approved"
+  // -------------------------
+  const rawKyc = (user as any)?.kycStatus ?? null;
+  const kycNormalized =
+    typeof rawKyc === "string" ? rawKyc.trim().toLowerCase() : null;
+  const shouldShowKYC = !(kycNormalized === "submitted" || kycNormalized === "approved");
+  // -------------------------
 
   if (isMobile) {
     return (

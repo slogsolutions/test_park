@@ -1,5 +1,7 @@
 import express from 'express';
 import { body } from 'express-validator';
+ // use your auth middleware
+import { updateProfile } from '../controllers/auth.js';
 import {
   register,
   login,
@@ -43,6 +45,7 @@ router.post('/reset-password/:token', resetPassword);
 router.get('/verify-email/:token', verifyEmail);
 router.post('/resend-verification', resendVerification);
 router.patch('/online', protect, setOnlineStatus);
-
+router.patch('/me', protect, updateProfile);
+router.patch('/me', protect, updateProfile);
 
 export default router;

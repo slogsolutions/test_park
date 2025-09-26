@@ -19,7 +19,9 @@ import axios from 'axios';
 import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
+import { startBookingCompletionCron } from './cronjob.js';
 import userTokensRouter from "./routes/userTokenRoutes.js"
+
 // Load .env from server/ folder explicitly so running from project root still works
 const envPath = path.resolve(process.cwd(), 'server', '.env');
 const result = dotenv.config({ path: envPath });
@@ -61,7 +63,6 @@ try {
 
 // Middleware
 // Allow the specific local frontend in dev (if provided), otherwise allow all
-
 app.use(
   cors({
     origin: AllowedOrigin,
@@ -83,7 +84,6 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use("/api/admin", adminRoutes);
 
-
 // Only initialize multer for routes that need multipart/form-data
 const upload = multer();
 
@@ -91,7 +91,6 @@ const upload = multer();
 app.get('/test', (req, res) => {
   res.send({ test: 'done' });
 });
-
 
 /**
  * Optional helper: server-generated reference_id (UUID)
@@ -330,7 +329,9 @@ io.on('connection', (socket) => {
 
 const PORT = process.env.PORT || 5000;
 
-
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// IMPORTANT: Start the cron job here - OUTSIDE the socket handlers
+startBookingCompletionCron();

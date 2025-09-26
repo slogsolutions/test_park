@@ -1,5 +1,5 @@
 // src/components/dashboard/Profile.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import ProviderLocations from "./ProviderSpaces";
 import BookedSlots from "./BookedSlot";
 import axios from "axios";
@@ -7,6 +7,8 @@ import LoadingScreen from "../../pages/LoadingScreen";
 import { Wallet } from "./Wallet";
 import { Settings } from "./Settings";
 import type { Booking, Provider } from "../../types";
+import { useRole } from "../../context/RoleContext"; // <- added
+import { useAuth } from "../../context/AuthContext"; // <- added to prefer auth.user for instant display
 
 /**
  * Dashboard Profile component that supports both Seller (provider) and Buyer views.
@@ -37,43 +39,95 @@ export function Profile() {
 
   const API_BASE_URL = import.meta.env.VITE_BASE_URL;
 
+  // read UI role from RoleContext so toggling buyer/seller updates dashboard immediately
+  const { role: uiRole } = useRole();
+
+  // prefer auth.user for instantaneous display (so edits reflect immediately)
+  const auth = useAuth();
+
+  // aggregated stats (from new endpoint /api/stats/me)
+  const [stats, setStats] = useState<{
+    buyerBookingsCount?: number;
+    providerBookingsCount?: number;
+    spacesCount?: number;
+    earnings?: number;
+    bookingsByDate?: any[];
+  } | null>(null);
+
   useEffect(() => {
     let isMounted = true;
 
     const fetchData = async () => {
       try {
+        setLoading(true);
         const token = localStorage.getItem("token");
         const headers = { Authorization: `Bearer ${token}` };
 
-        // Fetch profile details
+        // Use auth.user immediately if available for faster UI updates
+        if (auth?.user) {
+          setUser(auth.user as Provider);
+        }
+
+        // Fetch profile details (fresh copy)
         const profileRes = await axios.get(`${API_BASE_URL}/api/auth/me`, { headers });
         if (!isMounted) return;
         const profileData = profileRes.data;
         setUser(profileData);
 
-        // detect role/seller
-        const isSeller =
+        // Now fetch aggregated stats (used for counts / earnings)
+        try {
+          const statsRes = await axios.get(`${API_BASE_URL}/api/stats/me`, { headers });
+          if (!isMounted) return;
+          if (statsRes.status === 200) {
+            setStats(statsRes.data);
+          }
+        } catch (err) {
+          // stats endpoint may not be present yet — keep silent but log
+          console.warn("Failed to fetch stats:", err);
+        }
+
+        // detect role/seller — respect UI toggle (uiRole) first
+        const profileIndicatesSeller =
           profileData?.role === "seller" ||
           profileData?.isSeller === true ||
           profileData?.seller === true ||
           profileData?.type === "seller";
 
-        // fetch bookings depending on role
+        const isSeller = uiRole === "seller" ? true : profileIndicatesSeller;
+
+        // if uiRole is 'buyer' we prefer to show buyer bookings page
+        if (!isSeller) {
+          setCurrentPage("BuyerBookings");
+        } else {
+          // default for seller remains ProviderLocations if currently set to BuyerBookings
+          setCurrentPage((cur) => (cur === "BuyerBookings" ? "ProviderLocations" : cur));
+        }
+
+        // fetch bookings depending on role (respecting uiRole)
         if (isSeller) {
           // provider bookings for seller dashboard
-          const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/provider-bookings`, { headers });
-          if (!isMounted) return;
-          setBookings(bookingsRes.data || []);
+          try {
+            const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/provider-bookings`, { headers });
+            if (!isMounted) return;
+            setBookings(bookingsRes.data || []);
+          } catch (err) {
+            console.warn("provider-bookings request failed:", err);
+            setBookings([]);
+          }
         } else {
           // buyer bookings
-          const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/user-bookings`, { headers });
-          if (!isMounted) return;
-          setBookings(bookingsRes.data || []);
-          // switch to buyer bookings page by default
-          setCurrentPage("BuyerBookings");
+          try {
+            const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/user-bookings`, { headers });
+            if (!isMounted) return;
+            setBookings(bookingsRes.data || []);
+          } catch (err) {
+            console.warn("user-bookings request failed:", err);
+            setBookings([]);
+          }
         }
       } catch (error) {
         console.error("Error fetching data:", error);
+        setBookings([]);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -84,7 +138,8 @@ export function Profile() {
     return () => {
       isMounted = false;
     };
-  }, [API_BASE_URL]);
+    // re-run when uiRole changes so toggling updates view immediately
+  }, [API_BASE_URL, uiRole, auth]);
 
   if (loading) {
     return (
@@ -94,10 +149,40 @@ export function Profile() {
     );
   }
 
-  // Determine role again for render-time (defensive)
-  const isSeller =
-    user &&
-    (user.role === "seller" || (user as any).isSeller === true || (user as any).seller === true || (user as any).type === "seller");
+  // Determine role again for render-time (defensive).
+  // Prioritize UI toggle (uiRole) first so render matches the toggle instantly.
+  const isSeller = useMemo(() => {
+    if (uiRole === "seller") return true;
+    if (uiRole === "buyer") return false;
+    if (!user) return false;
+    return (
+      user.role === "seller" ||
+      (user as any).isSeller === true ||
+      (user as any).seller === true ||
+      (user as any).type === "seller"
+    );
+  }, [uiRole, user]);
+
+  // Normalize KYC status display (verified / pending / not done)
+  const kycRaw = useMemo(() => {
+    if (!user) return "";
+    const raw =
+      (user as any).kycStatus ||
+      (user as any).kycData?.status ||
+      ((user as any).kycData?.verified ? "approved" : "") ||
+      "";
+    return raw.toString().toLowerCase();
+  }, [user]);
+
+  const kycDisplay = useMemo(() => {
+    if (kycRaw === "approved" || kycRaw === "verified" || kycRaw === "done") {
+      return { text: "verified", className: "text-green-600" };
+    }
+    if (kycRaw === "pending") {
+      return { text: "pending", className: "text-yellow-600" };
+    }
+    return { text: "not done", className: "text-gray-500" };
+  }, [kycRaw]);
 
   // SELLER: Render the seller dashboard (same as original)
   if (isSeller) {
@@ -153,6 +238,10 @@ export function Profile() {
   }
 
   // BUYER: show simplified buyer profile and bookings only (no spaces, no rating)
+  // Use aggregated stats (if available) to show booking counts. Fallback to bookings.length.
+  const buyerBookingsCount = stats?.buyerBookingsCount ?? bookings?.length ?? 0;
+  const buyerSpacesCount = stats?.spacesCount ?? 0;
+
   return (
     <div className="mx-5 mb-52 my-5 min-h-screen bg-gray-100">
       <div className="max-w-4xl mx-auto p-6 bg-white rounded-2xl shadow">
@@ -165,17 +254,19 @@ export function Profile() {
 
         <div className="mt-6 grid grid-cols-3 gap-4 text-center">
           <div className="p-4 bg-gray-50 rounded">
-            <div className="text-xl font-semibold">{user?.kycData?.status ? user.kycData.status : "-"}</div>
+            <div className="text-xl font-semibold">
+              {kycDisplay.text === "verified" ? "verified" : kycDisplay.text === "pending" ? "pending" : "not done"}
+            </div>
             <div className="text-xs text-gray-500">KYC status</div>
           </div>
 
           <div className="p-4 bg-gray-50 rounded">
-            <div className="text-xl font-semibold">{bookings?.length ?? 0}</div>
+            <div className="text-xl font-semibold">{buyerBookingsCount}</div>
             <div className="text-xs text-gray-500">Total Bookings</div>
           </div>
 
           <div className="p-4 bg-gray-50 rounded">
-            <div className="text-xl font-semibold">—</div>
+            <div className="text-xl font-semibold">{buyerSpacesCount > 0 ? buyerSpacesCount : "—"}</div>
             <div className="text-xs text-gray-500">Spaces (buyer)</div>
           </div>
         </div>
