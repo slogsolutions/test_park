@@ -1,148 +1,187 @@
-import React, { useState, useEffect } from 'react';
-import { Search, MapPin, X, Car, Building } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, MapPin, X, Car, Building, Star, Clock, Shield, Zap, Navigation, Map } from 'lucide-react';
 import { searchLocation, GeocodingResult } from '../utils/geocoding';
+import { motion, AnimatePresence } from 'framer-motion';
 
 import ImageSlider from './ImageSlider';
-import image1 from '../assest/pacific.png'
-import image7 from '../assest/pacific.jpg'
-import image2 from '../assest/clocktower.jpeg'
-import image3 from '../assest/paltan.jpg'
-import image4 from '../assest/fri.jpeg'
-import image5 from '../assest/paltan.png'
-import image6 from '../assest/robercace.png'
-import image8 from '../assest/friimage.jpg'
-import image9 from '../assest/clocktower.png'
-import image10 from '../assest/robercaveimg.png'
+import image1 from '../assest/1.jpg';
+import image7 from '../assest/2.jpg';
+import image2 from '../assest/3.jpg';
+import image3 from '../assest/4.jpg';
+import image4 from '../assest/5.jpg';
+import image5 from '../assest/6.jpg';
+import image6 from '../assest/8.png';
+import image8 from '../assest/7.jpg';
+import image9 from '../assest/8.jpg';
+import image10 from '../assest/9.jpg';
 import { useMapContext } from '../context/MapContext';
 import { ParkingSpace } from '../types/parking';
 import { parkingService } from '../services/parking.service';
 import { toast } from 'react-toastify';
-import LocationSearchBox from '../components/search/LocationSearch';
 import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 
-// Updated props: accept both onLocationSelect (for selected place) and onProceed (no-arg — flip to Home)
 interface LocationSearchBoxProps {
   onLocationSelect?: (location: GeocodingResult) => void;
   onProceed?: () => void;
 }
 
-interface ParkingArea extends GeocodingResult {
-  parking: {
-    spots: number;
-    hourlyRate: number;
-    type: 'covered' | 'open' | 'multi-level';
-  };
+interface ParkingArea {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  description?: string;
+  rating?: number;
+  distance?: string;
+  price?: string;
 }
 
 const popularAreas: ParkingArea[] = [
   {
     id: '1',
-    placeName: 'Pacific Mall',
-    area: 'Rajpur Road',
-    latitude: 30.3398,
-    longitude: 78.0644,
     imageUrl: `${image1}`,
-    description: 'Popular shopping destination with ample parking',
-    parking: {
-      spots: 10,
-      hourlyRate: 30,
-      type: 'multi-level'
-    }
+    title: 'Downtown Premium',
+    description: '24/7 Secure Parking',
+    rating: 4.8,
+    distance: '0.5km',
+    price: '₹50/hr'
   },
   {
     id: '2',
-    placeName: 'Clock Tower',
-    area: 'City Center',
-    latitude: 30.3245,
-    longitude: 78.0339,
-    imageUrl: `${image2}`,
-    description: 'Historic landmark with nearby parking facilities',
-    parking: {
-      spots: 10,
-      hourlyRate: 20,
-      type: 'open'
-    }
+    imageUrl: `${image7}`,
+    title: 'Business District',
+    description: 'Covered & Monitored',
+    rating: 4.6,
+    distance: '1.2km',
+    price: '₹45/hr'
   },
   {
     id: '3',
-    placeName: 'Astley Hall',
-    area: 'Rajpur',
-    latitude: 30.3615,
-    longitude: 78.0719,
-    imageUrl: `${image5}`,
-    description: 'Cultural center with dedicated parking',
-    parking: {
-      spots: 10,
-      hourlyRate: 25,
-      type: 'covered'
-    }
+    imageUrl: `${image2}`,
+    title: 'EV Charging',
+    description: 'Spacious & Safe',
+    rating: 4.7,
+    distance: '0.8km',
+    price: '₹40/hr'
   },
   {
     id: '4',
-    placeName: 'Forest Research Institute',
-    area: 'New Forest',
-    latitude: 30.3426,
-    longitude: 77.9969,
     imageUrl: `${image4}`,
-    description: 'Historic institution with visitor parking',
-    parking: {
-      spots: 5,
-      hourlyRate: 15,
-      type: 'open'
-    }
+    title: 'Residential Zone',
+    description: 'Peaceful & Secure',
+    rating: 4.9,
+    distance: '1.5km',
+    price: '₹35/hr'
   },
   {
     id: '5',
-    placeName: 'Paltan Bazaar',
-    area: 'City Center',
-    latitude: 30.3252,
-    longitude: 78.0440,
-    imageUrl: `${image5}`,
-    description: 'Shopping district with multiple parking lots',
-    parking: {
-      spots: 12,
-      hourlyRate: 35,
-      type: 'multi-level'
-    }
+    imageUrl: `${image3}`,
+    title: 'Covered Parking',
+    description: 'Ample Space Available',
+    rating: 4.5,
+    distance: '2.1km',
+    price: '₹55/hr'
   },
   {
     id: '6',
-    placeName: "Robber's Cave",
-    area: 'New Forest',
-    latitude: 30.3752,
-    longitude: 78.0643,
-    imageUrl: `${image6}`, 
-    description: 'Tourist attraction with parking facilities',
-    parking: {
-      spots: 5,
-      hourlyRate: 20,
-      type: 'open'
-    }
+    imageUrl: `${image9}`, 
+    title: 'Premium Parking',
+    description: 'Long-term Security',
+    rating: 4.8,
+    distance: '3.2km',
+    price: '₹60/hr'
   }
 ];
 
 const featuredImages = [
-  { url: `${image7}`, title: 'Local Markets' },
-  { url: `${image10}`, title: 'Discover Dehradun' },
-  { url: `${image3}`, title: 'Scenic Views' },
-  { url: `${image8}`, title: 'Scenic Views' },
-  { url: `${image9}`, title: 'Scenic Views' }
+  { 
+    url: `${image5}`,
+    title: 'Valet Parking',
+    subtitle: 'Assisted Parking'
+  },
+  { 
+    url: `${image6}`,
+    title: '24/7 Security',
+    subtitle: 'Always Protected'
+  },
+  { 
+    url: `${image8}`,
+    title: 'Easy Booking',
+    subtitle: 'Instant Reservation'
+  },
+  { 
+    url: `${image10}`,
+    title: 'Prime Locations',
+    subtitle: 'Best Spots in City'
+  },
 ];
+
+// Floating animation component
+const FloatingElement = ({ children, delay = 0, yOffset = 20 }: { children: React.ReactNode; delay?: number; yOffset?: number }) => (
+  <motion.div
+    initial={{ y: yOffset, opacity: 0, scale: 0.95 }}
+    animate={{ y: 0, opacity: 1, scale: 1 }}
+    transition={{ 
+      duration: 0.6, 
+      delay,
+      type: "spring",
+      stiffness: 100
+    }}
+    whileHover={{ 
+      y: -5,
+      transition: { type: "spring", stiffness: 400 }
+    }}
+  >
+    {children}
+  </motion.div>
+);
+
+// Animated background particles
+const BackgroundParticles = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none">
+    {[...Array(20)].map((_, i) => (
+      <motion.div
+        key={i}
+        className="absolute w-2 h-2 bg-red-200 rounded-full"
+        initial={{
+          x: Math.random() * window.innerWidth,
+          y: Math.random() * window.innerHeight,
+        }}
+        animate={{
+          y: [0, -30, 0],
+          opacity: [0.3, 0.7, 0.3],
+        }}
+        transition={{
+          duration: 3 + Math.random() * 2,
+          repeat: Infinity,
+          delay: Math.random() * 2,
+        }}
+      />
+    ))}
+  </div>
+);
 
 const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<GeocodingResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedParking, setSelectedParking] = useState<ParkingArea | null>(null);
-  const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedParking, setSelectedParking] = useState<any | null>(null);
   const { viewport, setViewport } = useMapContext();
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchRadius, setSearchRadius] = useState(5000);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
   const navigate = useNavigate();
+
+  // Auto-rotate featured images
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveImage((prev) => (prev + 1) % featuredImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
@@ -168,7 +207,6 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
         }
       );
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -179,24 +217,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
     loadInitialAreas();
   }, []);
 
-  useEffect(() => {
-    const searchTimer = setTimeout(async () => {
-      if (query.length > 2) {
-        setIsLoading(true);
-        const locations = await searchLocation(query);
-        setResults(locations);
-        setIsLoading(false);
-      } else if (query.length === 0) {
-        const locations = await searchLocation('');
-        setResults(locations.slice(0, 3));
-      }
-    }, 300);
-
-    return () => clearTimeout(searchTimer);
-  }, [query]);
-
   const handleLocationSelect = async (result: GeocodingResult) => {
-    setSearchedLocation({ lat: result.latitude, lng: result.longitude });
     setViewport({ ...viewport, longitude: result.longitude, latitude: result.latitude });
 
     try {
@@ -209,187 +230,318 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
       toast.error('Failed to fetch parking spaces for the selected location.');
     }
 
-    // still call the consumer-supplied location handler if provided
     onLocationSelect?.(result);
   };
 
-  const handleGoToCurrentLocation = () => {
-    if (currentLocation) {
-      setViewport({
-        ...viewport,
-        latitude: currentLocation.lat,
-        longitude: currentLocation.lng,
-        zoom: 15
-      });
-      fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-    } else {
-      toast.info('Current location not available.');
-    }
-  };
-
-  const handleParkingSelect = (area: ParkingArea) => {
-    setViewport({
-      ...viewport,
-      latitude: area.latitude,
-      longitude: area.longitude,
-      zoom: 15
-    });
-    navigate(`/favorite?lat=${area.latitude}&lng=${area.longitude}`);
-  };
-
   return (
-    <div className="w-full pb-28 mt-5 max-w-2xl mx-auto px-4 py-4">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        {/* When SearchBar is clicked: open overlay AND call onProceed so parent can show Home */}
-        <SearchBar
-          onOpen={() => {
-            setIsSearchOpen(true);
-            // request parent to proceed to Home (if provided)
-            onProceed?.();
-          }}
-        />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-red-50 relative overflow-hidden">
+      {/* Animated Background */}
+      <BackgroundParticles />
+      
+      {/* Animated gradient orbs */}
+      <motion.div
+        className="absolute top-1/4 -left-20 w-72 h-72 bg-gradient-to-r from-red-200 to-pink-200 rounded-full blur-3xl opacity-40"
+        animate={{
+          x: [0, 100, 0],
+          y: [0, -50, 0],
+          scale: [1, 1.1, 1],
+        }}
+        transition={{
+          duration: 15,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+      <motion.div
+        className="absolute bottom-1/4 -right-20 w-72 h-72 bg-gradient-to-r from-blue-200 to-cyan-200 rounded-full blur-3xl opacity-30"
+        animate={{
+          x: [0, -100, 0],
+          y: [0, 50, 0],
+          scale: [1, 1.2, 1],
+        }}
+        transition={{
+          duration: 20,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
+
+      {/* Main Content - Header removed as requested */}
+      <div className="relative z-10 max-w-7xl mx-auto px-4 py-8">
+        {/* Hero Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-12 mt-8"
+        >
+          <motion.h1
+            className="text-5xl sm:text-7xl font-bold text-gray-900 mb-6"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
+            Find your perfect{' '}
+            <motion.span 
+              className="text-red-600 relative"
+              animate={{ 
+                backgroundPosition: ['0%', '100%'],
+              }}
+              transition={{ 
+                duration: 3, 
+                repeat: Infinity,
+                repeatType: "reverse"
+              }}
+              style={{
+                background: 'linear-gradient(45deg, #dc2626, #ef4444, #dc2626)',
+                backgroundSize: '200% 200%',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}
+            >
+              parking...
+            </motion.span>
+          </motion.h1>
+          
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto"
+          >
+            Let's Park the Future Smarter — Together
+          </motion.p>
+
+          {/* Enhanced Search Bar */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.6 }}
+            className="max-w-2xl mx-auto mb-12"
+          >
+            <SearchBar
+              onOpen={() => {
+                setIsSearchOpen(true);
+                onProceed?.();
+              }}
+            />
+          </motion.div>
+        </motion.div>
+
+        {/* Popular Areas Grid with Enhanced Animations */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.8 }}
+          className="mb-12"
+        >
+          <motion.h2 
+            className="text-3xl font-bold text-center text-gray-900 mb-8"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            Premium Parking Locations
+          </motion.h2>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
+            {popularAreas.map((area, index) => (
+              <FloatingElement key={area.id} delay={index * 0.1}>
+                <motion.div
+                  className="group relative bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl overflow-hidden border border-white/20 cursor-pointer"
+                  whileHover={{ 
+                    scale: 1.05,
+                    transition: { type: "spring", stiffness: 300 }
+                  }}
+                >
+                  <div className="relative overflow-hidden rounded-2xl">
+                    <motion.img
+                      src={area.imageUrl}
+                      alt={area.title}
+                      className="w-full h-32 sm:h-40 object-cover"
+                      whileHover={{ scale: 1.1 }}
+                      transition={{ duration: 0.5 }}
+                    />
+                    
+                    {/* Overlay with text */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    
+                    <div className="absolute bottom-0 left-0 right-0 p-3 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                      <motion.h3 
+                        className="text-white font-bold text-sm mb-1"
+                        initial={{ opacity: 0, y: 10 }}
+                        whileHover={{ opacity: 1, y: 0 }}
+                      >
+                        {area.title}
+                      </motion.h3>
+                      <motion.p 
+                        className="text-red-200 text-xs"
+                        initial={{ opacity: 0, y: 10 }}
+                        whileHover={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 }}
+                      >
+                        {area.description}
+                      </motion.p>
+                    </div>
+
+                    {/* Rating and Price Badges */}
+                    <div className="absolute top-2 left-2 flex items-center space-x-1 bg-black/50 rounded-full px-2 py-1">
+                      <Star className="w-3 h-3 text-yellow-400 fill-current" />
+                      <span className="text-white text-xs font-medium">{area.rating}</span>
+                    </div>
+                    
+                    <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-bold rounded-full px-2 py-1">
+                      {area.price}
+                    </div>
+
+                    {/* Distance Badge */}
+                    <div className="absolute bottom-2 right-2 bg-white/90 text-gray-900 text-xs rounded-full px-2 py-1 font-medium">
+                      {area.distance}
+                    </div>
+                  </div>
+                </motion.div>
+              </FloatingElement>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* Enhanced Featured Image Slider */}
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 1 }}
+          className="max-w-4xl mx-auto"
+        >
+          <motion.h3 
+            className="text-2xl font-bold text-center text-gray-900 mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1.2 }}
+          >
+            Why Choose Us?
+          </motion.h3>
+
+          <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/20">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeImage}
+                initial={{ opacity: 0, scale: 1.1 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.8 }}
+                className="relative h-64 sm:h-80"
+              >
+                <img
+                  src={featuredImages[activeImage].url}
+                  alt={featuredImages[activeImage].title}
+                  className="w-full h-full object-cover"
+                />
+                
+                {/* Text Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent flex items-center">
+                  <div className="p-8 text-white max-w-md">
+                    <motion.h4 
+                      className="text-2xl font-bold mb-2"
+                      initial={{ opacity: 0, x: -50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.3 }}
+                    >
+                      {featuredImages[activeImage].title}
+                    </motion.h4>
+                    <motion.p
+                      className="text-lg text-red-200"
+                      initial={{ opacity: 0, x: -50 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 }}
+                    >
+                      {featuredImages[activeImage].subtitle}
+                    </motion.p>
+                  </div>
+                </div>
+              </motion.div>
+            </AnimatePresence>
+
+            {/* Navigation Dots */}
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+              {featuredImages.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setActiveImage(index)}
+                  className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                    index === activeImage ? 'bg-red-600 scale-125' : 'bg-white/50'
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Quick Stats */}
+        <motion.div
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 1.4 }}
+          className="grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl mx-auto mt-12"
+        >
+          {[
+            { icon: <Car className="w-6 h-6" />, value: '10K+', label: 'Spaces' },
+            { icon: <Map className="w-6 h-6" />, value: '50+', label: 'Cities' },
+            { icon: <Star className="w-6 h-6" />, value: '4.8', label: 'Rating' },
+            { icon: <Shield className="w-6 h-6" />, value: '24/7', label: 'Security' },
+          ].map((stat, index) => (
+            <motion.div
+              key={stat.label}
+              className="text-center p-4 bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/20"
+              whileHover={{ scale: 1.05, y: -5 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <motion.div
+                className="text-red-600 mb-2 flex justify-center"
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.5 }}
+              >
+                {stat.icon}
+              </motion.div>
+              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+              <div className="text-sm text-gray-600">{stat.label}</div>
+            </motion.div>
+          ))}
+        </motion.div>
       </div>
 
-      {/* Search Section */}
-      <div className="absolute mt-10 top-4 left-4 right-4 z-10 ">
-        {/* <LocationSearchBox onLocationSelect={handleLocationSelect} onGoToCurrentLocation={handleGoToCurrentLocation}/> */}
-      </div>
-
+      {/* Search Overlay */}
       <SearchOverlay
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
       />
 
       {/* Search Results */}
-      {results.length > 0 && query.length > 2 && (
-        <div className="absolute z-50 left-4 right-4 sm:left-auto sm:right-auto sm:w-full max-w-2xl bg-white rounded-lg shadow-lg max-h-[calc(100vh-200px)] overflow-y-auto">
-          {results.map((result: any) => (
-            <button
-              key={result.id}
-              onClick={() => handleLocationSelect(result)}
-              className="w-full px-3 py-2 text-left hover:bg-red-50 flex items-center gap-2 border-b last:border-b-0"
-            >
-              <MapPin className="w-4 h-4 text-red-600 flex-shrink-0" />
-              <div>
-                <div className="font-medium text-sm text-gray-900">{result.placeName}</div>
-                <div className="text-xs text-gray-500">{result.area}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Popular Areas */}
-      {!query && (
-        <div className="mb-6">
-          <h2 className="text-base font-medium text-gray-800 mb-3">Find Your Parking</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {popularAreas.map((area: any) => (
-              <button
-                key={area.id}
-                onClick={() => handleParkingSelect(area)}
-                className="group relative overflow-hidden rounded-lg w-full aspect-[4/3]"
+      <AnimatePresence>
+        {results.length > 0 && query.length > 2 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="absolute z-50 left-4 right-4 sm:left-auto sm:right-auto sm:w-full max-w-2xl bg-white/95 backdrop-blur-md rounded-xl shadow-2xl max-h-64 overflow-y-auto border border-white/20"
+          >
+            {results.map((result: any) => (
+              <motion.button
+                key={result.id}
+                onClick={() => handleLocationSelect(result)}
+                className="w-full px-4 py-3 text-left hover:bg-red-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0"
+                whileHover={{ x: 5 }}
+                transition={{ type: "spring", stiffness: 300 }}
               >
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <span className="text-[120px] font-bold text-gray-100 opacity-50 group-hover:scale-150 transition-transform duration-500">
-                    P
-                  </span>
+                <MapPin className="w-5 h-5 text-red-600 flex-shrink-0" />
+                <div>
+                  <div className="font-medium text-gray-900">{result.placeName}</div>
+                  <div className="text-sm text-gray-500">{result.area}</div>
                 </div>
-                <img
-                  src={area.imageUrl}
-                  alt={area.placeName}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent group-hover:from-red-900/70 transition-colors" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/50">
-                  <Car className="w-8 h-8 text-white mb-2" />
-                  <p className="text-white text-lg font-bold">{area.parking.spots} spots</p>
-                  <p className="text-white text-sm">₹{area.parking.hourlyRate}/hr</p>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-2 group-hover:opacity-0 transition-opacity duration-300">
-                  <p className="text-white text-sm font-medium text-center line-clamp-1">{area.placeName}</p>
-                  <p className="text-gray-200 text-xs text-center line-clamp-1">{area.area}</p>
-                </div>
-                <div className="absolute top-2 right-2 bg-white/20 backdrop-blur-sm rounded-full p-1">
-                  <Car className="w-4 h-4 text-white" />
-                </div>
-              </button>
+              </motion.button>
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* Parking Information Modal */}
-      {selectedParking && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg max-w-md w-full p-4">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">{selectedParking.placeName}</h3>
-                <p className="text-sm text-gray-600">{selectedParking.area}</p>
-              </div>
-              <button
-                onClick={() => setSelectedParking(null)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="text-center p-4 bg-red-50 rounded-lg">
-                <span className="text-6xl font-bold text-red-600">P</span>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <Car className="w-5 h-5 text-red-600" />
-                  <span className="text-sm">
-                    {selectedParking.parking.spots} parking spots available
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Building className="w-5 h-5 text-red-600" />
-                  <span className="text-sm capitalize">{selectedParking.parking.type} parking</span>
-                </div>
-                <div className="bg-red-50 p-3 rounded-lg">
-                  <p className="text-sm font-medium text-red-900">₹{selectedParking.parking.hourlyRate}/hour</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => {
-                  handleLocationSelect(selectedParking);
-                  setSelectedParking(null);
-                }}
-                className="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
-              >
-                Select Location
-              </button>
-              <button
-                onClick={() => setSelectedParking(null)}
-                className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Featured Image Slider */}
-      {!query && (
-        <div>
-          <ImageSlider images={featuredImages} />
-        </div>
-      )}
-
-      {/* Loading Indicator */}
-      {isLoading && (
-        <div className="text-center py-3">
-          <p className="text-gray-600 text-sm">Searching areas...</p>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
