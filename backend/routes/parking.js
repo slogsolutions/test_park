@@ -8,6 +8,7 @@ import {
   getParkingSpaceById,
   getMyParkingSpaces,
   getParkingSpaceAvailability,
+  setOnlineStatus, // <-- imported new controller
 } from '../controllers/parking.js';
 import multer from 'multer';
 import path from 'path';
@@ -45,6 +46,9 @@ router.put('/:id', protect, upload.array('photos', 5), updateParkingSpace);
 router.get('/my-spaces', protect, getMyParkingSpaces);
 router.get('/:id/availability', protect, getParkingSpaceAvailability); // recommended
 router.get('/:id', getParkingSpaceById);
+
+// New route: set per-space online status
+router.patch('/:id/online', protect, setOnlineStatus);
 
 router.delete('/:id', protect, deleteParkingSpace);
 router.get('/', getParkingSpaces);

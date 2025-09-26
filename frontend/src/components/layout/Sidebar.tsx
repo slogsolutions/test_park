@@ -87,26 +87,7 @@ export function Sidebar({
       </nav>
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Online Status</span>
-          <div
-            role="switch"
-            aria-checked={onlineStatus}
-            tabIndex={0}
-            onKeyDown={handleKeyToggle(onToggleOnline)}
-            title={onlineStatus ? 'Set offline' : 'Set online'}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 cursor-pointer ${
-              onlineStatus ? 'bg-primary-500' : 'bg-gray-200 dark:bg-gray-700'
-            }`}
-            onClick={onToggleOnline}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                onlineStatus ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </div>
-        </div>
+        
 
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">Theme</span>
