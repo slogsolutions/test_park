@@ -1,25 +1,3 @@
-// olf --- for Single 
-// import admin from "../utils/firebase.js";
-
-// class NotificationService {
-//     static async sendNotification (deviceToken, title,body) {
-//         const message = {
-//             notification : {
-//                 title, body 
-//             },
-//             token : deviceToken
-//         };
-//         try{
-//             const response = await admin.messaging().send(message);
-//             return response;
-//         }
-//         catch(error){
-//             throw error;
-//         }
-//     }
-// }
-// export default NotificationService ;
-// import  {admin , firebaseApp } from "./../utils/firebase.js"; // named importimport { getMessaging } from "firebase-admin/messaging";
 import { firebaseApp } from "../utils/firebase.js";
 import { getMessaging } from "firebase-admin/messaging";
 

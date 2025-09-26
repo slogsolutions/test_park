@@ -8,6 +8,7 @@ import { Wallet } from "./Wallet";
 import { Settings } from "./Settings";
 import type { Booking, Provider } from "../../types";
 import { useRole } from "../../context/RoleContext"; // <- added
+import { useAuth } from "../../context/AuthContext"; // <- added to prefer auth.user for instant display
 
 /**
  * Dashboard Profile component that supports both Seller (provider) and Buyer views.
@@ -41,6 +42,18 @@ export function Profile() {
   // read UI role from RoleContext so toggling buyer/seller updates dashboard immediately
   const { role: uiRole } = useRole();
 
+  // prefer auth.user for instantaneous display (so edits reflect immediately)
+  const auth = useAuth();
+
+  // aggregated stats (from new endpoint /api/stats/me)
+  const [stats, setStats] = useState<{
+    buyerBookingsCount?: number;
+    providerBookingsCount?: number;
+    spacesCount?: number;
+    earnings?: number;
+    bookingsByDate?: any[];
+  } | null>(null);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -50,11 +63,28 @@ export function Profile() {
         const token = localStorage.getItem("token");
         const headers = { Authorization: `Bearer ${token}` };
 
-        // Fetch profile details
+        // Use auth.user immediately if available for faster UI updates
+        if (auth?.user) {
+          setUser(auth.user as Provider);
+        }
+
+        // Fetch profile details (fresh copy)
         const profileRes = await axios.get(`${API_BASE_URL}/api/auth/me`, { headers });
         if (!isMounted) return;
         const profileData = profileRes.data;
         setUser(profileData);
+
+        // Now fetch aggregated stats (used for counts / earnings)
+        try {
+          const statsRes = await axios.get(`${API_BASE_URL}/api/stats/me`, { headers });
+          if (!isMounted) return;
+          if (statsRes.status === 200) {
+            setStats(statsRes.data);
+          }
+        } catch (err) {
+          // stats endpoint may not be present yet — keep silent but log
+          console.warn("Failed to fetch stats:", err);
+        }
 
         // detect role/seller — respect UI toggle (uiRole) first
         const profileIndicatesSeller =
@@ -109,7 +139,7 @@ export function Profile() {
       isMounted = false;
     };
     // re-run when uiRole changes so toggling updates view immediately
-  }, [API_BASE_URL, uiRole]);
+  }, [API_BASE_URL, uiRole, auth]);
 
   if (loading) {
     return (
@@ -208,6 +238,10 @@ export function Profile() {
   }
 
   // BUYER: show simplified buyer profile and bookings only (no spaces, no rating)
+  // Use aggregated stats (if available) to show booking counts. Fallback to bookings.length.
+  const buyerBookingsCount = stats?.buyerBookingsCount ?? bookings?.length ?? 0;
+  const buyerSpacesCount = stats?.spacesCount ?? 0;
+
   return (
     <div className="mx-5 mb-52 my-5 min-h-screen bg-gray-100">
       <div className="max-w-4xl mx-auto p-6 bg-white rounded-2xl shadow">
@@ -227,12 +261,12 @@ export function Profile() {
           </div>
 
           <div className="p-4 bg-gray-50 rounded">
-            <div className="text-xl font-semibold">{bookings?.length ?? 0}</div>
+            <div className="text-xl font-semibold">{buyerBookingsCount}</div>
             <div className="text-xs text-gray-500">Total Bookings</div>
           </div>
 
           <div className="p-4 bg-gray-50 rounded">
-            <div className="text-xl font-semibold">—</div>
+            <div className="text-xl font-semibold">{buyerSpacesCount > 0 ? buyerSpacesCount : "—"}</div>
             <div className="text-xs text-gray-500">Spaces (buyer)</div>
           </div>
         </div>

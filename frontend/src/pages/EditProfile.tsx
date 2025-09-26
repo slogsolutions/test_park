@@ -72,7 +72,7 @@ export default function EditProfile() {
       }
 
       // navigate back to profile
-      navigate("/profileuser"); // use your profile route path
+      navigate("/profileuser"); // keep your route as-is
     } catch (err: any) {
       console.error("Profile update error:", err);
       setError(err?.message || "Failed to update profile");
@@ -88,35 +88,52 @@ export default function EditProfile() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Full name</label>
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full border rounded px-3 py-2" />
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1">Bio</label>
-            <textarea value={form.bio} onChange={(e) => setForm({ ...form, bio: e.target.value })} className="w-full border rounded px-3 py-2" rows={3} />
-          </div>
+          
 
-          <h4 className="font-medium mt-2">Contact / KYC</h4>
+          <h4 className="font-medium mt-2">Info</h4>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-gray-700">Phone</label>
-              <input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} className="w-full border rounded px-3 py-2" />
+              <input
+                value={form.phoneNumber}
+                onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              />
             </div>
 
             <div>
               <label className="block text-sm text-gray-700">Country</label>
-              <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} className="w-full border rounded px-3 py-2" />
+              <input
+                value={form.country}
+                onChange={(e) => setForm({ ...form, country: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              />
             </div>
 
             <div>
               <label className="block text-sm text-gray-700">City</label>
-              <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="w-full border rounded px-3 py-2" />
+              <input
+                value={form.city}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              />
             </div>
 
             <div>
               <label className="block text-sm text-gray-700">Address</label>
-              <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="w-full border rounded px-3 py-2" />
+              <input
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              />
             </div>
           </div>
 
