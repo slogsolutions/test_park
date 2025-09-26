@@ -275,7 +275,7 @@ export default function RegisterParking() {
                     className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Er. Vansh's Bungalow Parking"
+                    placeholder="Institute of Engineering parking lot"
                   />
                 </div>
 
