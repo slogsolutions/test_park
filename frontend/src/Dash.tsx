@@ -11,7 +11,6 @@ import LoadingScreen from './pages/LoadingScreen';
 import { Provider, Booking } from './types';
 import { ProviderDashboard } from './components/dashboard/Deatils';
 import { Profile } from './components/dashboard/Profile';
-import { authService } from './services/auth.service';
 
 import RegisterParking from './pages/RegisterParking';
 import ProviderLocations from './components/dashboard/ProviderSpaces';
@@ -20,7 +19,6 @@ import BookedSlots from './components/dashboard/BookedSlot';
 
 function Dash() {
   const navigate = useNavigate();
-  const [onlineStatus, setOnlineStatus] = useState<boolean>(false);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [provider, setProvider] = useState<Provider | null>(null);
@@ -46,9 +44,6 @@ function Dash() {
         const providerRes = await axios.get(`${API_BASE_URL}/api/auth/me`, { headers });
         const fetchedProvider = providerRes.data?.user ?? providerRes.data;
         setProvider(fetchedProvider);
-
-        const initialOnline = Boolean(fetchedProvider?.onlineStatus ?? false);
-        setOnlineStatus(initialOnline);
 
         const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/provider-bookings`, { headers });
         setBookings(bookingsRes.data);
@@ -80,17 +75,6 @@ function Dash() {
     try { localStorage.setItem('darkMode', JSON.stringify(newMode)); } catch {}
   };
 
-  const handleToggleOnline = async () => {
-    try {
-      const newStatus = !onlineStatus;
-      await authService.setOnline(newStatus);
-      setOnlineStatus(newStatus);
-      setProvider((prev) => prev ? { ...prev, onlineStatus: newStatus } : prev);
-    } catch (err) {
-      console.error('Failed to update online status', err);
-    }
-  };
-
   if (loading) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
@@ -109,8 +93,6 @@ function Dash() {
         darkMode={darkMode}
         onToggleDarkMode={handleToggleDarkMode}
         className="hidden md:flex"
-        onlineStatus={onlineStatus}
-        onToggleOnline={handleToggleOnline}
         onLogout={() => {
           localStorage.removeItem('token');
           navigate('/login');

@@ -84,6 +84,18 @@ export const parkingService = {
     );
     return response.data;
   },
+
+  // Toggle per-space online status
+  async toggleOnline(spaceId: string, isOnline: boolean) {
+    const response = await api.patch(`/parking/${spaceId}/online`, { isOnline });
+    return response.data;
+  },
+
+  // Soft-delete a parking space
+  async deleteSpace(spaceId: string) {
+    const response = await api.delete(`/parking/${spaceId}`);
+    return response.data;
+  },
 };
 
 export default parkingService;

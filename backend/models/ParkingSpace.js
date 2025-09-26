@@ -1,5 +1,3 @@
-
-
 import mongoose from "mongoose";
 
 const parkingSpaceSchema = new mongoose.Schema({
@@ -12,6 +10,20 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  // per-space online & soft-delete fields
+  isOnline: {
+    type: Boolean,
+    default: false,
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+  deletedAt: {
+    type: Date,
+    default: null,
+  },
+
   description: String,
   location: {
     type: {
