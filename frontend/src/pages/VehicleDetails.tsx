@@ -79,7 +79,7 @@ export default function VehicleDetails() {
           }
         } catch (error) {
           console.error('Error fetching parking space availability:', error);
-          alert('An error occurred while fetching availability');
+          // alert('An error occurred while fetching availability');
         }
       }
     };
