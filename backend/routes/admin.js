@@ -9,89 +9,12 @@ import Booking from "../models/Booking.js";
 import ParkingSpace from "../models/ParkingSpace.js";
 import seeder from "../seeder.js";
 import NotificationService from "../service/NotificationService.js"; //for firebase 
+
+import DeviceToken from '../models/DeviceToken.js'; // adjust path if needed
 const router = express.Router();
 
 
-// router.post("/firebase", async (req, res) => {
-//   try {
-//     const { title, body, userId, username, fullname, email, userIds, deviceToken } = req.body;
 
-//     if (!title || !body) {
-//       return res.status(400).json({ message: "Missing title/body" });
-//     }
-
-//     let tokens = [];
-
-//     // 1️⃣ Direct single device token
-//     if (deviceToken) {
-//       tokens = [deviceToken];
-//     }
-
-//     // 2️⃣ Single user by ID
-//     else if (userId) {
-//       const docs = await UserToken.find({ userId }).select("token -_id");
-//       tokens = docs.map(d => d.token);
-//     }
-
-//     // 3️⃣ Single user by username
-//     else if (username) {
-//       const user = await User.findOne({ "fullname.firstname": username });
-//       if (!user) return res.status(404).json({ message: "User not found" });
-
-//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
-//       tokens = docs.map(d => d.token);
-//     }
-
-//     // 4️⃣ By full name
-//     else if (fullname) {
-//       const user = await User.findOne({
-//         "fullname.firstname": fullname.firstname,
-//         "fullname.lastname": fullname.lastname
-//       });
-//       if (!user) return res.status(404).json({ message: "User not found" });
-
-//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
-//       tokens = docs.map(d => d.token);
-//     }
-
-//     // 5️⃣ By email
-//     else if (email) {
-//       const user = await User.findOne({ email });
-//       if (!user) return res.status(404).json({ message: "User not found" });
-
-//       const docs = await UserToken.find({ userId: user._id }).select("token -_id");
-//       tokens = docs.map(d => d.token);
-//     }
-
-//     // 6️⃣ List of user IDs
-//     else if (Array.isArray(userIds) && userIds.length > 0) {
-//       const docs = await UserToken.find({ userId: { $in: userIds } }).select("token -_id");
-//       tokens = docs.map(d => d.token);
-//     }
-
-//     // No target provided
-//     else {
-//       return res.status(400).json({ message: "No target specified" });
-//     }
-
-//     if (tokens.length === 0) {
-//       return res.status(404).json({ message: "No tokens found for target" });
-//     }
-
-//     // ✅ Send notification
-//     let response;
-//     if (tokens.length === 1) {
-//       response = await NotificationService.sendToDevice(tokens[0], title, body);
-//     } else {
-//       response = await NotificationService.sendToMultiple(tokens, title, body);
-//     }
-
-//     return res.json({ success: true, tokensSent: tokens.length, response });
-//   } catch (err) {
-//     console.error("Notification error:", err);
-//     return res.status(500).json({ message: "Failed to send notification", error: err.message });
-//   }
-// });
 
 router.post("/firebase", async (req, res) => {
   try {
@@ -182,6 +105,126 @@ router.post("/firebase", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/save-token-basic
+ * Body: { fcmToken: string (required), userId?: string, deviceInfo?: string }
+ *
+ * Behavior:
+ * - Requires fcmToken.
+ * - If userId provided => attach to token (set/overwrite).
+ * - If userId NOT provided => do not overwrite an existing userId (keep previous attachment).
+ * - Upserts by token, updates lastSeen & deviceInfo.
+ */
+router.post('/save-token-basic', async (req, res) => {
+  try {
+    const { fcmToken, userId, deviceInfo } = req.body || {};
+
+    console.log('[save-token-basic] payload:', {
+      hasFcmToken: !!fcmToken,
+      userId: userId ?? null,
+      deviceInfo,
+      ip: req.ip,
+      ts: new Date().toISOString(),
+    });
+
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: 'fcmToken is required' });
+    }
+
+    // Build update: always update lastSeen & deviceInfo
+    const update = {
+      $set: {
+        lastSeen: new Date(),
+        deviceInfo: deviceInfo ?? null,
+      },
+      $setOnInsert: {
+        createdAt: new Date(),
+      },
+    };
+
+    // If userId explicitly provided, attach/overwrite it.
+    if (userId) {
+      update.$set.userId = userId;
+    }
+
+    const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
+
+    // If userId not provided, we want to avoid overwriting existing userId.
+    // findOneAndUpdate with $set won't overwrite fields not in $set, so this logic is safe.
+    const doc = await DeviceToken.findOneAndUpdate({ token: fcmToken }, update, opts).exec();
+
+    return res.json({
+      success: true,
+      message: 'Token saved (basic)',
+      token: { id: doc._id, userId: doc.userId ?? null, token: doc.token },
+    });
+  } catch (err) {
+    console.error('[save-token-basic] error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/**
+ * POST /api/android-basic-save
+ * Body: { fcmToken: string (required), deviceInfo?: string }
+ *
+ * Minimal smoke-test: stores token with userId=null (if new) or updates lastSeen if exists.
+ */
+router.post('/android-basic-save', async (req, res) => {
+  try {
+    const { fcmToken, deviceInfo } = req.body || {};
+
+    console.log('[android-basic-save] payload:', {
+      hasFcmToken: !!fcmToken,
+      deviceInfo,
+      ip: req.ip,
+      ts: new Date().toISOString(),
+    });
+
+    if (!fcmToken) {
+      return res.status(400).json({ success: false, message: 'fcmToken is required' });
+    }
+
+    const filter = { token: fcmToken };
+    const update = {
+      $set: { lastSeen: new Date(), deviceInfo: deviceInfo ?? null },
+      $setOnInsert: { createdAt: new Date(), userId: null },
+    };
+    const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
+
+    const doc = await DeviceToken.findOneAndUpdate(filter, update, opts).exec();
+
+    return res.json({
+      success: true,
+      message: 'Token recorded (android-basic-save)',
+      token: { id: doc._id, userId: doc.userId ?? null, token: doc.token },
+    });
+  } catch (err) {
+    console.error('[android-basic-save] error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+/**
+ * GET /api/debug/tokens
+ * Dev-only: returns recent tokens for quick verification
+ * Query: ?limit=100
+ */
+router.get('/debug/tokens', async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit || '200', 10), 2000);
+    const docs = await DeviceToken.find({}, { userId: 1, token: 1, deviceInfo: 1, lastSeen: 1 })
+      .sort({ lastSeen: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    return res.json({ success: true, count: docs.length, tokens: docs });
+  } catch (err) {
+    console.error('[debug/tokens] error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 
 
 router.post("/seed", async(req,res) => {
@@ -206,24 +249,18 @@ router.get("/users", protect, adminOnly, async (req, res) => {
   }
 });
 
-// inside admin.js
-router.patch("/users/:id/verify", protect, adminOnly, async (req, res) => {
+router.put("/users/:id", protect, adminOnly, async (req, res) => {
   try {
     const { id } = req.params;
-    const { isVerified, kycStatus } = req.body;
-    const updateData = {};
-    if (isVerified !== undefined) updateData.isVerified = isVerified;
-    if (kycStatus !== undefined) updateData.kycStatus = kycStatus;
-
-    const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true }).select('-password');
+    const updateData = req.body;
+    const user = await User.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
     if (!user) return res.status(404).json({ error: "User not found" });
-    return res.json({ user });
+    res.json({ user });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: err.message });
+    console.error("Error updating user:", err);
+    res.status(500).json({ error: err.message });
   }
 });
-
 
 router.patch("/users/:id/verify", protect, adminOnly, async (req, res) => {
   try {
