@@ -203,27 +203,47 @@ export const updateParkingSpace = async (req, res) => {
 // New controller: set per-space online status (expects { isOnline: boolean } in body)
 export const setOnlineStatus = async (req, res) => {
   try {
+    console.log('>>> setOnlineStatus request - params.id:', req.params.id);
+    console.log('>>> setOnlineStatus request - body:', req.body);
+    console.log('>>> setOnlineStatus request - auth user id:', req.user ? req.user._id : null);
+
+    // Ensure user is present (protect middleware should have set req.user)
+    if (!req.user) {
+      return res.status(401).json({ message: 'Not authorized, user missing' });
+    }
+
     const { isOnline } = req.body;
     if (typeof isOnline !== 'boolean') {
       return res.status(400).json({ message: 'isOnline must be boolean' });
     }
 
-    const parkingSpace = await ParkingSpace.findById(req.params.id);
-    if (!parkingSpace || parkingSpace.isDeleted) {
-      return res.status(404).json({ message: 'Parking space not found' });
+    // Validate id format before DB query
+    const id = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: 'Invalid parking space id' });
     }
 
-    if (parkingSpace.owner.toString() !== req.user._id.toString()) {
+    const parkingSpace = await ParkingSpace.findById(id);
+    console.log('>>> ParkingSpace.findById result:', parkingSpace ? { id: parkingSpace._id.toString(), owner: parkingSpace.owner?.toString(), isDeleted: parkingSpace.isDeleted } : null);
+
+    if (!parkingSpace || parkingSpace.isDeleted) {
+      return res.status(404).json({ message: 'Parking space not found', id });
+    }
+
+    // Ensure owner exists and compare safely
+    const ownerId = parkingSpace.owner ? parkingSpace.owner.toString() : null;
+    if (!ownerId || ownerId !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
     parkingSpace.isOnline = isOnline;
     await parkingSpace.save();
 
-    res.json(parkingSpace);
+    // Return the updated parking space (or a smaller response if you prefer)
+    return res.json({ message: 'Status updated', parkingSpace });
   } catch (error) {
     console.error('Error setting online status', error);
-    res.status(500).json({ message: 'Failed to set online status' });
+    return res.status(500).json({ message: 'Failed to set online status' });
   }
 };
 

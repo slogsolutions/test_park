@@ -77,10 +77,15 @@ const ProviderLocations: React.FC = () => {
           loc._id === id ? { ...loc, isOnline: updated.isOnline } : loc
         )
       );
-    } catch (err) {
-      console.error('Failed to toggle online status:', err);
-      alert('Could not update online status');
-    }
+      } catch (err) {
+    console.error('Failed to toggle online status:', err);
+    const msg =
+      err?.response?.data?.message ||
+      err?.message ||
+      'Could not update online status';
+    alert(msg);
+  }
+
   };
 
   const handleDelete = async (id: string) => {
