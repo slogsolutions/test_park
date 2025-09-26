@@ -33,6 +33,7 @@ const MyBookings: React.FC = () => {
         setBookings(response.data);
       } catch (err) {
         setError("Failed to fetch bookings");
+        console.error("fetchBookings error:", err);
       } finally {
         setLoading(false);
       }
@@ -53,7 +54,8 @@ const MyBookings: React.FC = () => {
         prevBookings.filter((booking) => booking._id !== bookingId)
       );
       alert("Booking cancelled successfully");
-    } catch {
+    } catch (err) {
+      console.error("cancel booking error:", err);
       alert("Failed to cancel booking");
     }
   };
@@ -126,6 +128,7 @@ const MyBookings: React.FC = () => {
             );
 
             alert("Payment successful!");
+            // Refresh the bookings so UI is in-sync with backend
             setBookings((prevBookings) =>
               prevBookings.map((booking) =>
                 booking._id === bookingId
@@ -150,7 +153,8 @@ const MyBookings: React.FC = () => {
 
       const razorpay = new (window as any).Razorpay(options);
       razorpay.open();
-    } catch {
+    } catch (err) {
+      console.error("handlePayNow error:", err);
       alert("Failed to initiate payment");
     }
   };
@@ -168,7 +172,20 @@ const MyBookings: React.FC = () => {
         } 
       });
     } catch (e) {
+      console.error("handleTrackNow error:", e);
       alert('Failed to generate OTP. Try again.');
+    }
+  };
+
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case 'pending': return { label: 'Pending', color: 'text-yellow-600', iconGreen: false };
+      case 'accepted': return { label: 'Accepted', color: 'text-green-600', iconGreen: true };
+      case 'confirmed': return { label: 'Confirmed', color: 'text-blue-600', iconGreen: true };
+      case 'active': return { label: 'Active', color: 'text-green-600', iconGreen: true };
+      case 'rejected': return { label: 'Rejected', color: 'text-red-600', iconGreen: false };
+      case 'completed': return { label: 'Completed', color: 'text-gray-600', iconGreen: true };
+      default: return { label: s, color: 'text-gray-600', iconGreen: false };
     }
   };
 
@@ -190,92 +207,81 @@ const MyBookings: React.FC = () => {
         <p className="text-center text-gray-500">You don't have any bookings.</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {bookings.map((booking) => (
-            <div
-              key={booking._id}
-              className="p-5 bg-white rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out transform hover:scale-105"
-            >
-              <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-                <FaMapMarkerAlt className="mr-2 text-red-500" />
-                {booking.parkingSpace?.title || "N/A"}
-              </h3>
-              <ul className="text-gray-600 space-y-2">
-                <li className="flex items-center">
-                  <FaRegCalendarAlt className="mr-2 text-red-500" />
-                  <span>Start Time: </span>
-                  <span className="ml-2">{new Date(booking.startTime).toLocaleString()}</span>
-                </li>
-                <li className="flex items-center">
-                  <FaRegCalendarAlt className="mr-2 text-red-500" />
-                  <span>End Time: </span>
-                  <span className="ml-2">{new Date(booking.endTime).toLocaleString()}</span>
-                </li>
-                <li className="flex items-center">
-                  {/* ✅ Status with clear icon & color */}
-                  {booking.status === "confirmed" ? (
-                    <>
-                      <FaCheckCircle className="mr-2 text-green-500" />
-                      <span>Status: </span>
-                      <span className="text-green-600 font-semibold">Confirmed</span>
-                    </>
-                  ) : booking.status === "rejected" ? (
-                    <>
-                      <FaTimesCircle className="mr-2 text-red-500" />
-                      <span>Status: </span>
-                      <span className="text-red-600 font-semibold ml-2">Rejected</span>
-                    </>
-                  ) : booking.status === "confirmed" || booking.status === "active" ? (
-                    <>
-                      <FaCheckCircle className="mr-2 text-green-600" />
-                      <span>Status: </span>
-                      <span className="text-green-600 font-semibold ml-2">Active</span>
-                    </>
-                  ) : (
-                    <>
-                      <FaCheckCircle className="mr-2 text-yellow-500" />
-                      <span>Status: </span>
-                      <span className="text-yellow-600 font-semibold ml-2">Pending</span>
-                    </>
+          {bookings.map((booking) => {
+            const st = statusLabel(booking.status);
+            // Decide whether Pay button should appear:
+            // show Pay if payment is pending and booking is in a payable state (pending|accepted|confirmed)
+            const payableStatuses = ['pending', 'accepted', 'confirmed'];
+            const showPayNow = booking.paymentStatus === "pending" && payableStatuses.includes(booking.status);
+
+            return (
+              <div
+                key={booking._id}
+                className="p-5 bg-white rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out transform hover:scale-105"
+              >
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
+                  <FaMapMarkerAlt className="mr-2 text-red-500" />
+                  {booking.parkingSpace?.title || "N/A"}
+                </h3>
+                <ul className="text-gray-600 space-y-2">
+                  <li className="flex items-center">
+                    <FaRegCalendarAlt className="mr-2 text-red-500" />
+                    <span>Start Time: </span>
+                    <span className="ml-2">{new Date(booking.startTime).toLocaleString()}</span>
+                  </li>
+                  <li className="flex items-center">
+                    <FaRegCalendarAlt className="mr-2 text-red-500" />
+                    <span>End Time: </span>
+                    <span className="ml-2">{new Date(booking.endTime).toLocaleString()}</span>
+                  </li>
+                  <li className="flex items-center">
+                    {st.iconGreen ? (
+                      <FaCheckCircle className={`mr-2 ${st.color}`} />
+                    ) : (
+                      <FaTimesCircle className={`mr-2 ${st.color}`} />
+                    )}
+                    <span>Status: </span>
+                    <span className={`${st.color} font-semibold ml-2`}>{st.label}</span>
+                  </li>
+                  <li className="flex items-center">
+                    <FaMoneyBillWave className="mr-2 text-green-600" />
+                    <span>Total Price: </span>
+                    <span className="ml-2">₹{Math.ceil(booking.totalPrice)}</span>
+                  </li>
+                </ul>
+                <div className="mt-4 flex  space-x-4">
+                  {booking.status === "pending" && (
+                    <button
+                      onClick={() => handleCancelBooking(booking._id)}
+                      className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-red-600 transition duration-300 transform hover:scale-105"
+                    >
+                      <FaTimesCircle className="text-xl" />
+                      <span className="ml-2">Cancel</span>
+                    </button>
                   )}
-                </li>
-                <li className="flex items-center">
-                  <FaMoneyBillWave className="mr-2 text-green-600" />
-                  <span>Total Price: </span>
-                  <span className="ml-2">₹{Math.ceil(booking.totalPrice)}</span>
-                </li>
-              </ul>
-              <div className="mt-4 flex  space-x-4">
-                {booking.status === "pending" && (
-                  <button
-                    onClick={() => handleCancelBooking(booking._id)}
-                    className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-red-600 transition duration-300 transform hover:scale-105"
-                  >
-                    <FaTimesCircle className="text-xl" />
-                    <span className="ml-2">Cancel</span>
-                  </button>
-                )}
-                {booking.paymentStatus === "pending" && booking.status === "confirmed" && (
-                  <button
-                    onClick={() => handlePayNow(booking._id, Math.ceil(booking.totalPrice))}
-                    className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
-                  >
-                    <FaCreditCard className="text-xl" />
-                    <span className="ml-2">Pay Now</span>
-                  </button>
+                  {showPayNow && (
+                    <button
+                      onClick={() => handlePayNow(booking._id, Math.ceil(booking.totalPrice))}
+                      className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
+                    >
+                      <FaCreditCard className="text-xl" />
+                      <span className="ml-2">Pay Now</span>
+                    </button>
+                  )}
+                </div>
+                {booking.paymentStatus === "paid" && (
+                  <div className="mt-4 ">
+                    <button
+                      onClick={() => handleTrackNow(booking)}
+                      className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105"
+                    >
+                      Track Now
+                    </button>
+                  </div>
                 )}
               </div>
-              {booking.paymentStatus === "paid" && (
-                <div className="mt-4 ">
-                  <button
-                    onClick={() => handleTrackNow(booking)}
-                    className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105"
-                  >
-                    Track Now
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
