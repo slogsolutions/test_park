@@ -40,17 +40,16 @@ const bookingSchema = new mongoose.Schema({
   chassisNumber: String,
   drivingLicenseUrl: String,
   status: {
-  type: String,
-  enum: ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled'],
-  default: 'confirmed', // 👈 now confirmed by default
-},
+    type: String,
+    enum: ['pending', 'accepted', 'rejected', 'confirmed', 'active', 'completed', 'cancelled'],
+    default: 'pending', // <-- sensible default (not confirmed)
+  },
   paymentStatus: {
     type: String,
     enum: ['pending', 'paid', 'refunded', 'failed'],
     default: 'pending',
   },
 
-  // NEW: OTP fields
   otp: {
     type: String,
     default: null,
@@ -64,7 +63,6 @@ const bookingSchema = new mongoose.Schema({
     default: false,
   },
 
-  // Track when booking was actually started & completed
   startedAt: {
     type: Date,
     default: null,
