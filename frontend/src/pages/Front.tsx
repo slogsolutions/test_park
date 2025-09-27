@@ -341,7 +341,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            Premium Parking Locations
+            Premium Benefits
           </motion.h2>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">
