@@ -1,4 +1,5 @@
 // backend/routes/booking.js
+
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import {
@@ -13,6 +14,7 @@ import {
 } from '../controllers/booking.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
+import { verifySecondOTP } from '../controllers/booking.js';
 
 const router = express.Router();
 
@@ -24,6 +26,7 @@ router.get('/provider-bookings', protect, getProviderBookings);
 // OTP endpoints
 router.post('/:id/generate-otp', protect, generateOTP);
 router.post('/:id/verify-otp', protect, verifyOTP);
+router.post('/:id/verify-second-otp', protect, verifySecondOTP);
 
 // Status route
 router.put('/:id/status', protect, updateBookingStatus);
@@ -114,5 +117,8 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
+
+
+
 
 export default router;
