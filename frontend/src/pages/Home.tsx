@@ -16,6 +16,8 @@ import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+
 
 export default function Home() {
   const { viewport, setViewport } = useMapContext();
@@ -37,6 +39,9 @@ export default function Home() {
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  // ref for top search + dropdown area to handle outside clicks
+const searchRef = useRef<HTMLDivElement | null>(null);
+
 
   // Filters state
   const [filters, setFilters] = useState({
@@ -58,6 +63,26 @@ export default function Home() {
     { id: 'cctv', label: 'CCTV', icon: FaVideo, description: 'Surveillance cameras' },
     { id: 'wheelchair', label: 'Accessible', icon: FaWheelchair, description: 'Wheelchair accessible' },
   ];
+
+
+  // click-away to close filters dropdown
+useEffect(() => {
+  function handleClickOutside(e: MouseEvent) {
+    if (!searchRef.current) return;
+    if (!searchRef.current.contains(e.target as Node)) {
+      setShowFilters(false);
+    }
+  }
+
+  if (showFilters) {
+    document.addEventListener('mousedown', handleClickOutside);
+  } else {
+    document.removeEventListener('mousedown', handleClickOutside);
+  }
+
+  return () => document.removeEventListener('mousedown', handleClickOutside);
+}, [showFilters]);
+
 
   useEffect(() => {
     if (parkingSpaces.length === 0) {
@@ -478,164 +503,166 @@ export default function Home() {
   return (
     <div className="h-[calc(100vh-64px)] relative bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Top Search Bar with Filters button inline */}
-      <div className="absolute top-4 left-4 right-4 z-20">
-        <div className="relative max-w-3xl mx-auto">
-          <div className="flex items-center gap-3">
-            {/* Search input (shrinks when showFilters true) */}
-            <div
-              className="relative transition-all duration-300"
-              style={{ flex: showFilters ? '1 1 65%' : '1 1 85%' }}
-            >
-              <MdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl z-10" />
-              <input
-                type="text"
-                placeholder="Search for locations, areas, or landmarks..."
-                value={searchQuery}
-                onChange={(e) => handleSearchInputChange(e.target.value)}
-                className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-2xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-medium placeholder-gray-500 transition-all duration-300"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setShowSearchResults(false);
-                    if (currentLocation) {
-                      fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-                    }
-                  }}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  <MdClose className="text-xl" />
-                </button>
-              )}
-            </div>
+{/* Top Search Bar with Filters button inline */}
+<div className="absolute top-4 left-4 right-4 z-20">
+  <div ref={searchRef} className="relative max-w-3xl mx-auto overflow-visible">
+    <div className="flex items-center gap-3">
+      {/* Search input (shrinks when showFilters true) */}
+      <div
+        className="relative transition-all duration-300"
+        style={{ flex: showFilters ? '1 1 65%' : '1 1 85%' }}
+      >
+        <MdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl z-10" />
+        <input
+          type="text"
+          placeholder="Search for locations, areas, or landmarks..."
+          value={searchQuery}
+          onChange={(e) => handleSearchInputChange(e.target.value)}
+          className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-2xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-medium placeholder-gray-500 transition-all duration-300"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setShowSearchResults(false);
+              if (currentLocation) {
+                fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
+              }
+            }}
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors z-20"
+          >
+            <MdClose className="text-xl" />
+          </button>
+        )}
+      </div>
 
-            {/* Filter button (immediately after search) */}
-            <button
-              onClick={() => setShowFilters((prev) => !prev)}
-              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200"
-              title="Filters"
-            >
-              <MdFilterList className="text-lg text-blue-600" />
-              <span className="hidden sm:inline font-semibold text-gray-700">Filters</span>
-              {getActiveFilterCount() > 0 && (
-                <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                  {getActiveFilterCount()}
-                </span>
-              )}
-            </button>
+      {/* Filter button (immediately after search) */}
+      <button
+        onClick={() => setShowFilters((prev) => !prev)}
+        className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200 z-20"
+        title="Filters"
+      >
+        <MdFilterList className="text-lg text-blue-600" />
+        <span className="hidden sm:inline font-semibold text-gray-700">Filters</span>
+        {getActiveFilterCount() > 0 && (
+          <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+            {getActiveFilterCount()}
+          </span>
+        )}
+      </button>
+    </div>
+
+    {/* Search Results Dropdown */}
+    {showSearchResults && searchResults.length > 0 && (
+      <div className="absolute top-full left-0 mt-2 w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
+        {searchResults.map((result, index) => (
+          <button
+            key={index}
+            onClick={() => handleLocationSelect(result)}
+            className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+          >
+            <MdLocationOn className="text-blue-500 text-xl flex-shrink-0" />
+            <div className="text-left">
+              <div className="font-medium text-gray-900 text-sm">
+                {result.address.split(',')[0]}
+              </div>
+              <div className="text-xs text-gray-500 truncate">
+                {result.address.split(',').slice(1).join(',').trim()}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+    )}
+
+    {/* Filters dropdown (right-aligned small panel) */}
+    {showFilters && (
+      <div className="absolute top-full right-0 mt-3 z-50 w-[320px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-bold text-gray-800 text-lg">Filter Parking</h3>
+          <button
+            onClick={clearAllFilters}
+            className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-lg hover:opacity-90 transition-opacity font-medium"
+          >
+            Clear all
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-gray-100">
+          <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <span>Price Range</span>
+            <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
+              {filters.isPriceFilterActive
+                ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
+                : 'Any price'
+              }
+            </span>
+          </h4>
+          <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
+            <span>₹0</span>
+            <span>₹1000</span>
           </div>
+          <input
+            type="range"
+            min="0"
+            max="1000"
+            step="50"
+            value={filters.priceRange[1]}
+            onChange={(e) => handlePriceRangeChange(filters.priceRange[0], parseInt(e.target.value))}
+            className="w-full"
+          />
+        </div>
 
-          {/* Search Results Dropdown */}
-          {showSearchResults && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
-              {searchResults.map((result, index) => (
+        <div className="p-4">
+          <h4 className="font-semibold text-gray-700 mb-3">Amenities</h4>
+          <div className="space-y-2">
+            {amenityFilters.map((amenity) => {
+              const IconComponent = amenity.icon;
+              const isActive = filters.amenities[amenity.id as keyof typeof filters.amenities];
+
+              return (
                 <button
-                  key={index}
-                  onClick={() => handleLocationSelect(result)}
-                  className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                  key={amenity.id}
+                  onClick={() => handleFilterToggle(amenity.id)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border-2 ${
+                    isActive
+                      ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm'
+                      : 'bg-gray-50 border-transparent hover:bg-gray-100'
+                  }`}
                 >
-                  <MdLocationOn className="text-blue-500 text-xl flex-shrink-0" />
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900 text-sm">
-                      {result.address.split(',')[0]}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {result.address.split(',').slice(1).join(',').trim()}
-                    </div>
+                  <div className={`p-2 rounded-lg ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                    <IconComponent className="text-lg" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-gray-800">{amenity.label}</div>
+                    <div className="text-xs text-gray-500">{amenity.description}</div>
+                  </div>
+                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                    isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500' : 'bg-white border-gray-300'
+                  }`}>
+                    {isActive && <span className="text-white text-sm font-bold">✓</span>}
                   </div>
                 </button>
-              ))}
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 rounded-b-2xl">
+          <div className="text-center">
+            <div className="text-sm font-semibold text-gray-700">
+              Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
             </div>
-          )}
-
-          {/* Filters dropdown (right-aligned small panel) */}
-          {showFilters && (
-            <div className="absolute top-full right-0 mt-3 z-40 w-[320px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-                <h3 className="font-bold text-gray-800 text-lg">Filter Parking</h3>
-                <button
-                  onClick={clearAllFilters}
-                  className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-lg hover:opacity-90 transition-opacity font-medium"
-                >
-                  Clear all
-                </button>
-              </div>
-
-              <div className="p-4 border-b border-gray-100">
-                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                  <span>Price Range</span>
-                  <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
-                    {filters.isPriceFilterActive
-                      ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
-                      : 'Any price'
-                    }
-                  </span>
-                </h4>
-                <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
-                  <span>₹0</span>
-                  <span>₹1000</span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="1000"
-                  step="50"
-                  value={filters.priceRange[1]}
-                  onChange={(e) => handlePriceRangeChange(filters.priceRange[0], parseInt(e.target.value))}
-                  className="w-full"
-                />
-              </div>
-
-              <div className="p-4">
-                <h4 className="font-semibold text-gray-700 mb-3">Amenities</h4>
-                <div className="space-y-2">
-                  {amenityFilters.map((amenity) => {
-                    const IconComponent = amenity.icon;
-                    const isActive = filters.amenities[amenity.id as keyof typeof filters.amenities];
-
-                    return (
-                      <button
-                        key={amenity.id}
-                        onClick={() => handleFilterToggle(amenity.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border-2 ${
-                          isActive
-                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm'
-                            : 'bg-gray-50 border-transparent hover:bg-gray-100'
-                        }`}
-                      >
-                        <div className={`p-2 rounded-lg ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                          <IconComponent className="text-lg" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <div className="font-semibold text-gray-800">{amenity.label}</div>
-                          <div className="text-xs text-gray-500">{amenity.description}</div>
-                        </div>
-                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                          isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500' : 'bg-white border-gray-300'
-                        }`}>
-                          {isActive && <span className="text-white text-sm font-bold">✓</span>}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 rounded-b-2xl">
-                <div className="text-center">
-                  <div className="text-sm font-semibold text-gray-700">
-                    Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Radius: {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
-                  </div>
-                </div>
-              </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Radius: {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
             </div>
-          )}
+          </div>
         </div>
       </div>
+    )}
+  </div>
+</div>
+
 
       {/* Current Location Button */}
       <div className="absolute bottom-24 right-4 z-10">
