@@ -17,38 +17,63 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const navigate = useNavigate();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   
-  const address: any = space.address || {};
+  const address: any = (space as any).address || {};
   const street = address.street || 'No street information';
   const city = address.city || 'No city information';
-  const price = space.priceParking ?? space.price ?? 0;
-  const rating = space.rating ?? 0;
-  const amenities = space.amenities || [];
-  
-  // Create image array
-  const images = Array.isArray(space.photos) && space.photos.length > 0 
-    ? space.photos 
-    : space.photos 
-      ? [space.photos] 
+  const rating = (space as any).rating ?? 0;
+  const amenities = (space as any).amenities || [];
+
+  // currency formatter
+  const fmt = (value: number, decimals = 2) =>
+    new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: decimals }).format(value);
+
+  // compute discounted price meta (won't modify original object)
+  const computeDiscountedPrice = (s: any) => {
+    const base = Number(s.priceParking ?? s.pricePerHour ?? s.price ?? 0) || 0;
+    const rawDiscount = s.discount ?? 0;
+    const discount = Number.isFinite(Number(rawDiscount)) ? Number(rawDiscount) : 0;
+    const clamped = Math.max(0, Math.min(100, discount));
+    const discounted = +(base * (1 - clamped / 100)).toFixed(2);
+    return {
+      basePrice: +base.toFixed(2),
+      discountPercent: clamped,
+      discountedPrice: discounted,
+      hasDiscount: clamped > 0 && discounted < base,
+    };
+  };
+
+  // prefer precomputed __price (if Home attached it), otherwise compute
+  const priceMeta = (space as any).__price ?? computeDiscountedPrice(space as any);
+  const basePrice = priceMeta.basePrice;
+  const discountedPrice = priceMeta.discountedPrice;
+  const hasDiscount = priceMeta.hasDiscount;
+  const discountPercent = priceMeta.discountPercent;
+
+  // Create image array (support photos as array or single value)
+  const images = Array.isArray((space as any).photos) && (space as any).photos.length > 0
+    ? (space as any).photos
+    : (space as any).photos
+      ? [(space as any).photos]
       : [
           'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
         ];
 
   const handleBookNow = (e: React.MouseEvent) => {
     e.stopPropagation();
-    
-  if (!user) {
-    toast.info('Please log in to book the parking space.');
-    navigate('/login');
-    return;
-  }
+
+    if (!user) {
+      toast.info('Please log in to book the parking space.');
+      navigate('/login');
+      return;
+    }
 
     if (!user.isVerified) {
       toast.info('Your account is not verified. Please complete your verification to book.');
       return;
     }
 
-    const sid = space._id?.toString() || space._id;
-    const uid = user._id || user.id;
+    const sid = (space as any)._id?.toString() || (space as any)._id;
+    const uid = (user as any)._id || (user as any).id;
     navigate('/vehicle-details', { state: { spaceId: sid, userId: uid } });
   };
 
@@ -85,8 +110,8 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
 
   return (
     <Popup
-      latitude={space.location.coordinates[1]}
-      longitude={space.location.coordinates[0]}
+      latitude={(space as any).location.coordinates[1]}
+      longitude={(space as any).location.coordinates[0]}
       onClose={onClose}
       closeButton={true}
       closeOnClick={false}
@@ -95,8 +120,8 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={{ 
-        maxWidth: '320px',
-        padding: '0',
+        maxWidth: '360px',
+        padding: 0,
         borderRadius: '12px'
       }}
       closeOnMove={false}
@@ -107,10 +132,10 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
         onMouseLeave={onMouseLeave}
       >
         {/* Image Section */}
-        <div className="relative h-28 bg-gradient-to-br from-blue-400 to-blue-600">
+        <div className="relative h-36 bg-gradient-to-br from-blue-400 to-blue-600">
           <img
             src={images[currentImageIndex]}
-            alt={space.title || 'Parking space'}
+            alt={(space as any).title || 'Parking space'}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-black/10"></div>
@@ -120,17 +145,17 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
             <>
               <button
                 onClick={prevImage}
-                className="absolute left-1 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-6 h-6 flex items-center justify-center transition-all duration-200 shadow-lg"
+                className="absolute left-1 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-7 h-7 flex items-center justify-center transition-all duration-200 shadow-lg"
                 aria-label="Previous image"
               >
-                <FaChevronLeft className="text-xs" />
+                <FaChevronLeft className="text-sm" />
               </button>
               <button
                 onClick={nextImage}
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-6 h-6 flex items-center justify-center transition-all duration-200 shadow-lg"
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 bg-white/90 hover:bg-white text-gray-800 rounded-full w-7 h-7 flex items-center justify-center transition-all duration-200 shadow-lg"
                 aria-label="Next image"
               >
-                <FaChevronRight className="text-xs" />
+                <FaChevronRight className="text-sm" />
               </button>
             </>
           )}
@@ -139,14 +164,27 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
           {rating > 0 && (
             <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-full flex items-center shadow-lg">
               <FaStar className="text-yellow-400 mr-1 text-xs" />
-              <span className="text-xs font-bold">{rating.toFixed(1)}</span>
+              <span className="text-xs font-bold">{Number(rating).toFixed(1)}</span>
             </div>
           )}
 
-          {/* Price Tag */}
-          <div className="absolute top-2 left-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-1 rounded-full shadow-lg">
-            <span className="font-bold">₹{price}</span>
-            <span className="text-xs ml-0.5">/hour</span>
+          {/* Price Tag - show discounted price with original struck-through when available */}
+          <div className="absolute top-2 left-2 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full shadow-lg border border-white/20 flex items-center gap-3">
+            {hasDiscount ? (
+              <div className="flex flex-col items-start">
+                <div className="text-xs text-gray-400 line-through leading-none">{fmt(basePrice, 0)}</div>
+                <div className="text-sm font-bold text-green-700 leading-none">{fmt(discountedPrice)}</div>
+              </div>
+            ) : (
+              <div className="text-sm font-bold text-blue-700">{fmt(basePrice)}</div>
+            )}
+
+            {hasDiscount && (
+              <div className="ml-2 text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-0.5 rounded">
+                {discountPercent}% OFF
+              </div>
+            )}
+            <div className="text-xs text-gray-500 ml-1">/hour</div>
           </div>
         </div>
 
@@ -154,7 +192,7 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
         <div className="p-3">
           {/* Title */}
           <h3 className="font-bold text-gray-900 text-base mb-1 leading-tight">
-            {space.title || 'Premium Parking Space'}
+            {(space as any).title || 'Premium Parking Space'}
           </h3>
 
           {/* Location */}
@@ -164,9 +202,9 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
           </div>
 
           {/* Description */}
-          {space.description && (
-            <p className="text-gray-700 text-xs mb-2 leading-relaxed line-clamp-2">
-              {space.description}
+          {(space as any).description && (
+            <p className="text-gray-700 text-xs mb-2 leading-relaxed line-clamp-3">
+              {(space as any).description}
             </p>
           )}
 
@@ -174,21 +212,22 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
           {amenities.length > 0 && (
             <div className="mb-2">
               <div className="flex flex-wrap gap-1">
-                {amenities.slice(0, 3).map((amenity, index) => {
+                {amenities.slice(0, 4).map((amenity, index) => {
                   const Icon = getAmenityIcon(amenity);
                   return (
                     <span
                       key={index}
-                      className="inline-flex items-center px-1.5 py-0.5 bg-blue-50 rounded text-xs font-medium text-blue-800 border border-blue-200"
+                      className="inline-flex items-center px-2 py-0.5 bg-blue-50 rounded text-xs font-medium text-blue-800 border border-blue-200"
+                      title={amenity}
                     >
-                      <Icon className="mr-0.5 text-xs" />
-                      {amenity.length > 10 ? amenity.substring(0, 8) + '...' : amenity}
+                      <Icon className="mr-1 text-xs" />
+                      {amenity.length > 12 ? amenity.substring(0, 10) + '...' : amenity}
                     </span>
                   );
                 })}
-                {amenities.length > 3 && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                    +{amenities.length - 3}
+                {amenities.length > 4 && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
+                    +{amenities.length - 4}
                   </span>
                 )}
               </div>
@@ -200,10 +239,12 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
         <div className="p-3 border-t border-gray-100 bg-gray-50">
           <button
             onClick={handleBookNow}
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 px-3 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center"
+            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-2 px-3 rounded-lg font-semibold text-sm shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center gap-2"
           >
-            <FaCheck className="mr-1 text-xs" />
-            Book Now - ₹{price}/hour
+            <FaCheck className="text-xs" />
+            <span>Book Now</span>
+            <span className="font-bold">- {fmt(hasDiscount ? discountedPrice : basePrice)}</span>
+            <span className="text-xs text-white/80">/hr</span>
           </button>
         </div>
       </div>

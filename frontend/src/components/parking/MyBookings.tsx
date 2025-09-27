@@ -13,7 +13,7 @@ type Booking = {
   status: string;
   paymentStatus: string;
   totalPrice: number;
-  pricePerHour?: number;
+  priceParking?: number;
 };
 
 const MyBookings: React.FC = () => {
@@ -89,6 +89,71 @@ const MyBookings: React.FC = () => {
       console.error('Failed to request OTP', err);
       throw err;
     }
+  };
+
+  // Helper: compute discount meta for a parkingSpace
+  const computePriceMeta = (space: any) => {
+    // base price priority: priceParking, priceParking, price (some of your models use different keys)
+    const baseRaw = space?.priceParking ?? space?.priceParking ?? space?.price ?? 0;
+    const base = Number(baseRaw) || 0;
+
+    // try common discount keys
+    let rawDiscount = space?.discount ?? space?.discountPercent ?? space?.discount_percentage ?? 0;
+
+    // if string like "10%" -> strip
+    if (typeof rawDiscount === 'string') {
+      rawDiscount = rawDiscount.replace?.('%', '') ?? rawDiscount;
+    }
+
+    // if object { percent: 10 } or similar
+    if (typeof rawDiscount === 'object' && rawDiscount !== null) {
+      rawDiscount = rawDiscount.percent ?? rawDiscount.value ?? rawDiscount.amount ?? 0;
+    }
+
+    const discountNum = Number(rawDiscount);
+    const discountPercent = Number.isFinite(discountNum) ? Math.max(0, Math.min(100, discountNum)) : 0;
+
+    return {
+      basePrice: +base.toFixed(2),
+      discountPercent,
+      hasDiscount: discountPercent > 0,
+    };
+  };
+
+  // Calculate duration in hours (decimal)
+  const getHoursDuration = (startISO: string, endISO: string) => {
+    try {
+      const start = new Date(startISO).getTime();
+      const end = new Date(endISO).getTime();
+      if (isNaN(start) || isNaN(end) || end <= start) return 0;
+      const ms = end - start;
+      const hours = ms / (1000 * 60 * 60);
+      return hours;
+    } catch {
+      return 0;
+    }
+  };
+
+  // compute totals for a booking using parkingSpace discount
+  const computeTotalsForBooking = (booking: Booking) => {
+    const space = booking.parkingSpace ?? {};
+    const meta = computePriceMeta(space);
+    // prefer booking.priceParking if provided (e.g., stored at booking creation)
+    const perHour = Number(booking.priceParking ?? meta.basePrice ?? 0) || 0;
+    const hours = getHoursDuration(booking.startTime, booking.endTime) || 0;
+    // if hours is 0 (malformed), fallback to 1 hour to avoid 0 totals
+    const effectiveHours = hours > 0 ? hours : 1;
+
+    const originalTotal = +(perHour * effectiveHours);
+    const discountedTotal = +(originalTotal * (1 - meta.discountPercent / 100));
+    return {
+      perHour,
+      hours: effectiveHours,
+      originalTotal: +originalTotal.toFixed(2),
+      discountedTotal: +discountedTotal.toFixed(2),
+      discountPercent: meta.discountPercent,
+      hasDiscount: meta.hasDiscount,
+    };
   };
 
   const handlePayNow = async (bookingId: string, amount: number) => {
@@ -214,6 +279,11 @@ const MyBookings: React.FC = () => {
             const payableStatuses = ['pending', 'accepted', 'confirmed'];
             const showPayNow = booking.paymentStatus === "pending" && payableStatuses.includes(booking.status);
 
+            // compute totals using discount if available
+            const totals = computeTotalsForBooking(booking);
+            // amount to send to payment API: use ceil of discountedTotal (existing code used Math.ceil)
+            const paymentAmountToUse = totals.discountedTotal;
+
             return (
               <div
                 key={booking._id}
@@ -243,10 +313,22 @@ const MyBookings: React.FC = () => {
                     <span>Status: </span>
                     <span className={`${st.color} font-semibold ml-2`}>{st.label}</span>
                   </li>
+
+                  {/* Price display: show original (strike) and discounted if applicable */}
                   <li className="flex items-center">
                     <FaMoneyBillWave className="mr-2 text-green-600" />
                     <span>Total Price: </span>
-                    <span className="ml-2">₹{Math.ceil(booking.totalPrice)}</span>
+                    <div className="ml-2">
+                      {totals.hasDiscount ? (
+                        <div className="flex flex-col">
+                          <div className="text-sm text-gray-400 line-through">₹{totals.originalTotal.toFixed(2)}</div>
+                          <div className="text-lg font-bold text-green-700">₹{totals.discountedTotal.toFixed(2)}</div>
+                          <div className="text-xs text-white inline-block mt-1 bg-green-500 px-2 py-0.5 rounded">{totals.discountPercent}% OFF</div>
+                        </div>
+                      ) : (
+                        <div className="text-lg font-semibold">₹{totals.originalTotal.toFixed(2)}</div>
+                      )}
+                    </div>
                   </li>
                 </ul>
                 <div className="mt-4 flex  space-x-4">
@@ -261,7 +343,7 @@ const MyBookings: React.FC = () => {
                   )}
                   {showPayNow && (
                     <button
-                      onClick={() => handlePayNow(booking._id, Math.ceil(booking.totalPrice))}
+                      onClick={() => handlePayNow(booking._id, paymentAmountToUse)}
                       className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
                     >
                       <FaCreditCard className="text-xl" />

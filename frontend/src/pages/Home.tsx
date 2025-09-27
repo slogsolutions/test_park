@@ -84,6 +84,24 @@ export default function Home() {
     }
   ];
 
+  // ---------- NEW: price meta helper ----------
+  const computePriceMeta = (space: any) => {
+    // prefer priceParking, then pricePerHour, then price
+    const baseRaw = space?.priceParking ?? space?.pricePerHour ?? space?.price ?? 0;
+    const base = Number(baseRaw) || 0;
+    const rawDiscount = space?.discount ?? 0;
+    const discount = Number(rawDiscount);
+    const clamped = Number.isFinite(discount) ? Math.max(0, Math.min(100, discount)) : 0;
+    const discounted = +(base * (1 - clamped / 100)).toFixed(2);
+    return {
+      basePrice: +base.toFixed(2),
+      discountedPrice: discounted,
+      discountPercent: clamped,
+      hasDiscount: clamped > 0 && discounted < base,
+    };
+  };
+  // --------------------------------------------
+
   // Apply filters whenever parkingSpaces, filters, or searchQuery change
   useEffect(() => {
     if (parkingSpaces.length === 0) {
@@ -107,7 +125,7 @@ export default function Home() {
 
       // Price filter - only apply if user explicitly activated it
       if (filters.isPriceFilterActive) {
-        const price = space.priceParking ?? space.price ?? 0;
+        const price = (space as any).__price?.discountedPrice ?? space.priceParking ?? space.price ?? 0;
         const [minPrice, maxPrice] = filters.priceRange;
         if (price < minPrice || price > maxPrice) {
           return false;
@@ -121,10 +139,10 @@ export default function Home() {
 
       if (activeAmenityFilters.length > 0) {
         const spaceAmenities = space.amenities || [];
-        const spaceAmenitiesLower = spaceAmenities.map(amenity => amenity.toLowerCase());
+        const spaceAmenitiesLower = spaceAmenities.map((amenity: string) => amenity.toLowerCase());
         
-        const hasAllSelectedAmenities = activeAmenityFilters.every(amenityFilter => 
-          spaceAmenitiesLower.some(spaceAmenity => 
+        const hasAllSelectedAmenities = activeAmenityFilters.every((amenityFilter) => 
+          spaceAmenitiesLower.some((spaceAmenity: string) => 
             spaceAmenity.includes(amenityFilter.toLowerCase())
           )
         );
@@ -256,9 +274,15 @@ export default function Home() {
     try {
       setLoading(true);
       const spaces = await parkingService.getNearbySpaces(lat, lng, searchRadius);
-      setParkingSpaces(spaces || []);
+
+      // Attach computed price meta to each space so list & popup can use it
+      const spacesWithPrice = (spaces || []).map((s: any) => {
+        return { ...s, __price: s.__price ?? computePriceMeta(s) };
+      });
+
+      setParkingSpaces(spacesWithPrice);
       
-      if (spaces && spaces.length > 0) {
+      if (spacesWithPrice && spacesWithPrice.length > 0) {
         setTimeout(() => {
           setViewport(prev => ({
             ...prev,
@@ -474,12 +498,18 @@ export default function Home() {
     try {
       setLoading(true);
       const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, searchRadius);
-      setParkingSpaces(spaces || []);
+
+      // Attach price meta
+      const spacesWithPrice = (spaces || []).map((s: any) => {
+        return { ...s, __price: s.__price ?? computePriceMeta(s) };
+      });
+
+      setParkingSpaces(spacesWithPrice);
       
-      if (!spaces || spaces.length === 0) {
+      if (!spacesWithPrice || spacesWithPrice.length === 0) {
         toast.info('No parking spaces found in this area. Try increasing the search radius.');
       } else {
-        toast.success(`Found ${spaces.length} parking spaces near ${result.address.split(',')[0]}`);
+        toast.success(`Found ${spacesWithPrice.length} parking spaces near ${result.address.split(',')[0]}`);
       }
     } catch (error) {
       toast.error('Failed to fetch parking spaces for the selected location.');
