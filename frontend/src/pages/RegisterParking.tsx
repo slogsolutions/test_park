@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { Info, MapPin } from 'lucide-react';
+import { Info, MapPin, Star, Upload, Clock, Calendar, Shield, Zap, Eye, Accessibility } from 'lucide-react';
 import Map, { Marker } from 'react-map-gl';
 import { parkingService } from '../services/parking.service';
 import { useMapContext } from '../context/MapContext';
 import LocationSearchBox from '../components/search/LocationSearch';
-import { reverseGeocode } from '../utils/geocoding'; // ADDED
+import { reverseGeocode } from '../utils/geocoding';
 
 interface ParkingFormData {
   title: string;
@@ -21,10 +21,17 @@ interface ParkingFormData {
   country: string;
   amenities: string[];
   photos: FileList | null;
-  availability: { date: string; slots: { startTime: string; endTime: string; isBooked: boolean }[] }[];
+  availability: { date: string; slots: { startTime: string; endTime: string; isBooked: boolean }[] };
+  discount: number;
 }
 
-const amenitiesOptions = ['covered', 'security', 'charging', 'cctv', 'wheelchair'];
+const amenitiesOptions = [
+  { id: 'covered', label: 'Covered', icon: Shield, color: 'text-blue-600' },
+  { id: 'security', label: '24/7 Security', icon: Shield, color: 'text-green-600' },
+  { id: 'charging', label: 'EV Charging', icon: Zap, color: 'text-purple-600' },
+  { id: 'cctv', label: 'CCTV', icon: Eye, color: 'text-red-600' },
+  { id: 'wheelchair', label: 'Wheelchair Access', icon: Accessibility, color: 'text-orange-600' }
+];
 
 export default function RegisterParking() {
   const navigate = useNavigate();
@@ -48,63 +55,59 @@ export default function RegisterParking() {
     country: '',
     amenities: [],
     photos: null,
-    availability: [],
+    availability: { date: '', slots: [{ startTime: '', endTime: '', isBooked: false }] },
+    discount: 0,
   });
 
+  // Calculate discounted price
+  const discountedPrice = formData.priceParking * (1 - formData.discount / 100);
+  const savingsAmount = formData.priceParking - discountedPrice;
+
   const addAvailabilitySlot = () => {
-    const newAvailability = {
-      date: '',
-      slots: [{ startTime: '', endTime: '', isBooked: false }],
-    };
-    setFormData({ ...formData, availability: [...formData.availability, newAvailability] });
+    const newSlot = { startTime: '', endTime: '', isBooked: false };
+    setFormData({ 
+      ...formData, 
+      availability: {
+        ...formData.availability,
+        slots: [...formData.availability.slots, newSlot]
+      }
+    });
   };
 
-  const handleAvailabilityChange = (index: number, field: string, value: any) => {
-    const updatedAvailability = [...formData.availability];
-    const [fieldName, slotIndex] = field.split('-');
-    const slotIdx = parseInt(slotIndex, 10);
-
-    if (fieldName === 'date') {
-      updatedAvailability[index].date = value;
-    } else if ((fieldName === 'startTime' || fieldName === 'endTime') && !isNaN(slotIdx)) {
-      updatedAvailability[index].slots[slotIdx] = {
-        ...updatedAvailability[index].slots[slotIdx],
-        [fieldName]: value,
-      };
-    }
-
-    setFormData({ ...formData, availability: updatedAvailability });
+  const handleAvailabilityChange = (slotIndex: number, field: string, value: string) => {
+    const updatedSlots = [...formData.availability.slots];
+    updatedSlots[slotIndex] = { ...updatedSlots[slotIndex], [field]: value };
+    
+    setFormData({ 
+      ...formData, 
+      availability: { ...formData.availability, slots: updatedSlots }
+    });
   };
 
-  // helper to extract lng/lat from different shapes (markerPosition or map events)
   const extractLngLat = (obj: any) => {
-    // obj may be { latitude, longitude } or { lat, lng } or { latitude, lng } etc.
-    const longitude =
-      obj?.longitude ?? obj?.lng ?? obj?.lon ?? obj?.long ?? (Array.isArray(obj) ? obj[0] : undefined);
-    const latitude =
-      obj?.latitude ?? obj?.lat ?? obj?.latitude ?? (Array.isArray(obj) ? obj[1] : undefined);
-    return { longitude: longitude !== undefined ? Number(longitude) : undefined, latitude: latitude !== undefined ? Number(latitude) : undefined };
+    const longitude = obj?.longitude ?? obj?.lng ?? obj?.lon ?? obj?.long ?? (Array.isArray(obj) ? obj[0] : undefined);
+    const latitude = obj?.latitude ?? obj?.lat ?? obj?.latitude ?? (Array.isArray(obj) ? obj[1] : undefined);
+    return { 
+      longitude: longitude !== undefined ? Number(longitude) : undefined, 
+      latitude: latitude !== undefined ? Number(latitude) : undefined 
+    };
   };
 
-  // extract from react-map-gl event which sometimes provides lngLat as array or object
   const extractFromMapEvent = (evt: any) => {
     const lngLat = evt?.lngLat ?? evt?.point ?? null;
     if (Array.isArray(evt?.lngLat)) {
-      // [lng, lat]
       return { longitude: Number(evt.lngLat[0]), latitude: Number(evt.lngLat[1]) };
     }
     if (evt?.lngLat && typeof evt.lngLat === 'object') {
       return { longitude: Number(evt.lngLat.lng ?? evt.lngLat[0]), latitude: Number(evt.lngLat.lat ?? evt.lngLat[1]) };
     }
-    // last-resort: try evt.lng and evt.lat
     return { longitude: Number(evt.lng ?? evt.longitude), latitude: Number(evt.lat ?? evt.latitude) };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    // ... existing submit logic (unchanged)
     try {
-      // Build address & availability
       const address = {
         street: formData.street,
         city: formData.city,
@@ -113,16 +116,15 @@ export default function RegisterParking() {
         country: formData.country,
       };
 
-      const formattedAvailability = formData.availability.map((availability) => ({
-        date: availability.date,
-        slots: availability.slots.map((slot) => ({
-          startTime: `${availability.date}T${slot.startTime}:00`,
-          endTime: `${availability.date}T${slot.endTime}:00`,
+      const formattedAvailability = [{
+        date: formData.availability.date,
+        slots: formData.availability.slots.map((slot) => ({
+          startTime: `${formData.availability.date}T${slot.startTime}:00`,
+          endTime: `${formData.availability.date}T${slot.endTime}:00`,
           isBooked: slot.isBooked,
         })),
-      }));
+      }];
 
-      // Normalize coordinates from markerPosition
       const { longitude: rawLon, latitude: rawLat } = extractLngLat(markerPosition);
 
       if (rawLon === undefined || rawLat === undefined || isNaN(Number(rawLon)) || isNaN(Number(rawLat))) {
@@ -133,7 +135,6 @@ export default function RegisterParking() {
       const lon = Number(rawLon);
       const lat = Number(rawLat);
 
-      // If there are no photos, send JSON (cleanest)
       if (!formData.photos || formData.photos.length === 0) {
         const payload = {
           title: formData.title,
@@ -145,18 +146,15 @@ export default function RegisterParking() {
           availability: formattedAvailability,
           amenities: formData.amenities,
           location: { type: 'Point', coordinates: [lon, lat] },
+          discount: Number(formData.discount),
         };
 
-        console.log('Posting JSON payload to /api/parking:', payload);
-
         await parkingService.registerSpaceJSON(payload);
-
         toast.success('Parking space registered successfully!');
         navigate('/');
         return;
       }
 
-      // Otherwise (photos present) - send FormData
       const data = new FormData();
       data.append('address', JSON.stringify(address));
       data.append('availability', JSON.stringify(formattedAvailability));
@@ -165,39 +163,25 @@ export default function RegisterParking() {
       data.append('pricePerHour', String(formData.pricePerHour));
       data.append('priceParking', String(formData.priceParking));
       data.append('availableSpots', String(formData.availableSpots));
-      // send amenities as one JSON string
       data.set('amenities', JSON.stringify(formData.amenities));
-      // attach photos under the field name "photos"
       Array.from(formData.photos).forEach((file) => data.append('photos', file));
-
-      // Append coordinates deterministically (set avoids duplicate/missing values)
+      data.set('discount', String(formData.discount));
+      
       const locationObj = { type: 'Point', coordinates: [lon, lat] };
       data.set('location', JSON.stringify(locationObj));
       data.set('lng', String(lon));
       data.set('lat', String(lat));
-
-      // DEBUG: print entries
-      for (const pair of data.entries()) {
-        const val = pair[1] instanceof File ? (pair[1] as File).name : pair[1];
-        console.log('FormData entry:', pair[0], val);
-      }
 
       await parkingService.registerSpace(data);
       toast.success('Parking space registered successfully!');
       navigate('/');
     } catch (err: any) {
       console.error('Error registering parking space:', err);
-      // show full server response if any
-      if (err?.response) {
-        console.error('Server status:', err.response.status);
-        console.error('Server response data:', err.response.data);
-      }
       toast.error(`Failed to register parking space: ${err.response?.data?.message || err.message}`);
     }
   };
 
   const handleLocationSelect = (location: any) => {
-    // location object from LocationSearchBox should contain lat/lng or latitude/longitude
     const { longitude, latitude } = extractLngLat(location);
     setMarkerPosition({
       latitude: latitude ?? markerPosition.latitude,
@@ -223,12 +207,9 @@ export default function RegisterParking() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-
-        // move marker and map without unmounting the map
         setMarkerPosition({ latitude, longitude });
         setViewport({ ...viewport, latitude, longitude, zoom: 14 });
 
-        // reverse geocode to auto‑fill the address fields
         try {
           const loc = await reverseGeocode(latitude, longitude);
           setFormData((prev) => ({
@@ -249,146 +230,243 @@ export default function RegisterParking() {
     );
   };
 
-  // helper to display file names
   const renderFileNames = () => {
-    if (!formData.photos || formData.photos.length === 0) return <span className="italic text-sm text-gray-500">No photos chosen</span>;
-    return Array.from(formData.photos).map((f, i) => <div key={i} className="text-sm text-gray-700">{(f as File).name}</div>);
+    if (!formData.photos || formData.photos.length === 0) 
+      return <span className="italic text-sm text-gray-500">No photos chosen</span>;
+    return Array.from(formData.photos).map((f, i) => 
+      <div key={i} className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded">{(f as File).name}</div>
+    );
   };
 
   return (
-    // PAGE WRAPPER for full-viewport bg/text colors in both themes
-    <div className="min-h-screen bg-gray-50 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
-      <div className="max-w-7xl mx-auto px-6 py-10">
-        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-6">Register Your Parking Space</h1>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-100">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-red-600 to-red-800 bg-clip-text text-transparent">
+            Register Your Parking Space
+          </h1>
+          <p className="text-lg text-gray-600 dark:text-gray-400 mt-3 max-w-2xl mx-auto">
+            List your parking space and start earning today. Fill in the details below to get started.
+          </p>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left: Form */}
+          {/* Left: Form Section */}
           <div className="lg:col-span-2">
-            <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 p-6 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Title</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Institute of Engineering parking lot"
-                  />
+            <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Basic Information Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                    <Star className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Basic Information</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Tell us about your parking space</p>
+                  </div>
                 </div>
 
-                {/* Parking Space Price */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1 flex items-center">
-                    Parking Space Price
-                    <span className="ml-2 relative group">
-                      <Info className="w-4 h-4 text-gray-500 cursor-pointer" />
-                      <span className="absolute bottom-6 left-0 w-56 bg-black text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                        Default set for 2 hours. You can change it as required.
-                      </span>
-                    </span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                    value={formData.priceParking}
-                    onChange={(e) =>
-                      setFormData({ ...formData, priceParking: parseFloat(e.target.value || '0') })
-                    }
-                    placeholder="Enter numeric value"
-                  />
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Parking Space Title
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="e.g., Secure Downtown Parking"
+                    />
+                  </div>
 
-                {/* Slots */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Slots</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="1"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                    value={formData.availableSpots}
-                    onChange={(e) =>
-                      setFormData({ ...formData, availableSpots: parseInt(e.target.value || '0') })
-                    }
-                    placeholder="Number of parking slots"
-                  />
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Available Spots
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.availableSpots}
+                      onChange={(e) => setFormData({ ...formData, availableSpots: parseInt(e.target.value) })}
+                    />
+                  </div>
 
-                {/* Price per Hour */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Price per Hour</label>
-                  <input
-                    type="number"
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                    value={formData.pricePerHour}
-                    onChange={(e) =>
-                      setFormData({ ...formData, pricePerHour: parseFloat(e.target.value || '0') })
-                    }
-                    placeholder="e.g. 50"
-                  />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      rows={4}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Describe your parking space features, access instructions, and any rules..."
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Description */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Description</label>
-                <textarea
-                  className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-200"
-                  rows={4}
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Describe your parking space, access details and any rules..."
-                />
+              {/* Pricing Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-green-100 dark:bg-green-900 rounded-lg">
+                    <Clock className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Pricing Details</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Set your rates and discounts</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Base Price per Hour (₹)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.priceParking}
+                      onChange={(e) => setFormData({ ...formData, priceParking: parseFloat(e.target.value || '0') })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Late Fee per Hour (₹)
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="0"
+                      step="0.01"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.pricePerHour}
+                      onChange={(e) => setFormData({ ...formData, pricePerHour: parseFloat(e.target.value || '0') })}
+                      placeholder="Additional charge for overtime"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Discount (%)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+                      value={formData.discount}
+                      onChange={(e) => {
+                        let v = parseFloat(e.target.value || '0');
+                        if (v < 0) v = 0;
+                        if (v > 100) v = 100;
+                        setFormData({ ...formData, discount: v });
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Price Display */}
+                {formData.discount > 0 && (
+                  <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Original Price:</span>
+                        <span className="ml-2 text-lg font-semibold text-gray-900 dark:text-white">
+                          ₹{formData.priceParking.toFixed(2)}/hour
+                        </span>
+                      </div>
+                      <div className="text-center">
+                        <span className="text-sm text-green-600 dark:text-green-400 font-semibold">
+                          {formData.discount}% OFF
+                        </span>
+                        <div className="text-lg font-bold text-green-700 dark:text-green-300">
+                          ₹{discountedPrice.toFixed(2)}/hour
+                        </div>
+                      </div>
+                      {/* <div className="text-right">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">You save:</span>
+                        <div className="text-lg font-semibold text-green-600 dark:text-green-400">
+                          ₹{savingsAmount.toFixed(2)}/hour
+                        </div>
+                      </div> */}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Amenities */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Amenities</label>
-                <div className="flex flex-wrap gap-3">
+              {/* Amenities Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                    <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Amenities</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Select available features</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                   {amenitiesOptions.map((amenity) => {
-                    const checked = formData.amenities.includes(amenity);
+                    const IconComponent = amenity.icon;
+                    const checked = formData.amenities.includes(amenity.id);
                     return (
                       <label
-                        key={amenity}
-                        className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
+                        key={amenity.id}
+                        className={`relative flex flex-col items-center p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
                           checked
-                            ? 'bg-red-600 text-white border-red-600'
-                            : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
-                        } cursor-pointer`}
+                            ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                            : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 hover:border-gray-300'
+                        }`}
                       >
                         <input
                           type="checkbox"
-                          className="hidden"
+                          className="absolute opacity-0"
                           checked={checked}
                           onChange={(e) => {
                             const newAmenities = e.target.checked
-                              ? [...formData.amenities, amenity]
-                              : formData.amenities.filter((a) => a !== amenity);
+                              ? [...formData.amenities, amenity.id]
+                              : formData.amenities.filter((a) => a !== amenity.id);
                             setFormData({ ...formData, amenities: newAmenities });
                           }}
                         />
-                        <span className="capitalize text-sm">{amenity}</span>
+                        <IconComponent className={`h-8 w-8 mb-2 ${checked ? amenity.color : 'text-gray-400'}`} />
+                        <span className={`text-sm font-medium text-center ${checked ? 'text-gray-900 dark:text-white' : 'text-gray-600 dark:text-gray-400'}`}>
+                          {amenity.label}
+                        </span>
                       </label>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Photos */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Photos</label>
-                <div className="flex items-center gap-4">
-                  <label className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg cursor-pointer shadow-sm hover:shadow-md">
+              {/* Photos Card */}
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                    <Upload className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Photos</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Upload clear images of your parking space</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <label className="flex flex-col items-center justify-center w-32 h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-2xl cursor-pointer hover:border-red-400 transition-colors">
+                    <Upload className="h-8 w-8 text-gray-400 mb-2" />
+                    <span className="text-sm text-gray-500 dark:text-gray-400 text-center px-2">Choose Files</span>
                     <input
                       type="file"
                       multiple
@@ -396,226 +474,186 @@ export default function RegisterParking() {
                       className="hidden"
                       onChange={(e) => setFormData({ ...formData, photos: e.target.files })}
                     />
-                    <svg className="h-5 w-5 text-red-600 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0016.586 6L13 2.414A2 2 0 0011.586 2H4z"/></svg>
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Choose Files</span>
                   </label>
 
                   <div className="flex-1">
-                    {renderFileNames()}
+                    <div className="grid grid-cols-2 gap-2">
+                      {renderFileNames()}
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Availability UI (uses your existing functions) */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-semibold text-gray-700 dark:text-gray-300">Availability (optional)</label>
-                  <button type="button" onClick={addAvailabilitySlot} className="text-sm text-red-600 hover:underline">Add slot</button>
-                </div>
-
-                <div className="space-y-3">
-                  {formData.availability.length === 0 && (
-                    <div className="text-sm text-gray-500">No availability configured. Add dates and times if you want to predefine slots.</div>
-                  )}
-
-                  {formData.availability.map((avail, i) => (
-                    <div key={i} className="p-3 border rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700">
-                      <div className="mb-2">
-                        <label className="text-xs text-gray-600 dark:text-gray-300">Date</label>
-                        <input
-                          type="date"
-                          value={avail.date}
-                          onChange={(e) => handleAvailabilityChange(i, 'date', e.target.value)}
-                          className="mt-1 w-full px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
-                        />
-                      </div>
-
-                      {avail.slots.map((slot, si) => (
-                        <div key={si} className="grid grid-cols-2 gap-2 items-end mb-2">
-                          <div>
-                            <label className="text-xs text-gray-600 dark:text-gray-300">Start time</label>
-                            <input
-                              type="time"
-                              value={slot.startTime}
-                              onChange={(e) => handleAvailabilityChange(i, `startTime-${si}`, e.target.value)}
-                              className="mt-1 w-full px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-xs text-gray-600 dark:text-gray-300">End time</label>
-                            <input
-                              type="time"
-                              value={slot.endTime}
-                              onChange={(e) => handleAvailabilityChange(i, `endTime-${si}`, e.target.value)}
-                              className="mt-1 w-full px-3 py-2 rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-sm"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+              {/* Submit Button */}
+              <div className="flex justify-end">
                 <button
                   type="submit"
-                  className="w-full inline-flex items-center justify-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-red-300"
+                  className="px-8 py-4 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  Submit
+                  Register Parking Space
                 </button>
               </div>
             </form>
           </div>
 
-          {/* Right: Map + address + tips */}
-          <aside className="space-y-6">
-            <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800">
-              <div className="h-64 rounded-lg overflow-hidden mb-3 bg-gray-50 dark:bg-gray-800">
-                <Map
-                  {...viewport}
-                  onMove={(evt) => setViewport(evt.viewState)}
-                  onClick={async (evt: any) => {
-                    const { longitude, latitude } = extractFromMapEvent(evt);
-                    if (!isNaN(latitude) && !isNaN(longitude)) {
-                      setMarkerPosition({ latitude, longitude });
-                      try {
-                        const loc = await reverseGeocode(latitude, longitude);
-                        setFormData((prev) => ({
-                          ...prev,
-                          street: loc.street || '',
-                          city: loc.city || '',
-                          state: loc.state || '',
-                          zipCode: loc.zipCode || '',
-                          country: loc.country || '',
-                        }));
-                      } catch {
-                        toast.info('Pinned location set; address lookup failed.');
-                      }
-                    }
-                  }}
-                  mapboxAccessToken="pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A"
-                  style={{ width: '100%', height: '100%' }}
-                  mapStyle="mapbox://styles/mapbox/streets-v11"
-                >
-                  {!isNaN(markerPosition.latitude) && !isNaN(markerPosition.longitude) && (
-                    <Marker
-                      latitude={markerPosition.latitude}
-                      longitude={markerPosition.longitude}
-                      draggable
-                      onDragEnd={async (evt: any) => {
-                        const { longitude, latitude } = extractFromMapEvent(evt);
-                        if (!isNaN(latitude) && !isNaN(longitude)) {
-                          setMarkerPosition({ latitude, longitude });
-                          try {
-                            const loc = await reverseGeocode(latitude, longitude);
-                            setFormData((prev) => ({
-                              ...prev,
-                              street: loc.street || '',
-                              city: loc.city || '',
-                              state: loc.state || '',
-                              zipCode: loc.zipCode || '',
-                              country: loc.country || '',
-                            }));
-                          } catch {
-                            toast.info('Pinned location set; address lookup failed.');
-                          }
-                        }
-                      }}
-                    >
-                      <MapPin className="h-6 w-6 text-red-500" />
-                    </Marker>
-                  )}
-                </Map>
-              </div>
+          {/* Right: Map & Location Section */}
+          <div className="space-y-6">
+            {/* Map Card */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2 bg-red-100 dark:bg-red-900 rounded-lg">
+                    <MapPin className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Location</h2>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Pin your exact parking location</p>
+                  </div>
+                </div>
 
-              <div className="mb-4">
+                <div className="h-80 rounded-xl overflow-hidden mb-4 bg-gray-100 dark:bg-gray-700">
+                  <Map
+                    {...viewport}
+                    onMove={(evt) => setViewport(evt.viewState)}
+                    onClick={async (evt: any) => {
+                      const { longitude, latitude } = extractFromMapEvent(evt);
+                      if (!isNaN(latitude) && !isNaN(longitude)) {
+                        setMarkerPosition({ latitude, longitude });
+                        try {
+                          const loc = await reverseGeocode(latitude, longitude);
+                          setFormData((prev) => ({
+                            ...prev,
+                            street: loc.street || '',
+                            city: loc.city || '',
+                            state: loc.state || '',
+                            zipCode: loc.zipCode || '',
+                            country: loc.country || '',
+                          }));
+                        } catch {
+                          toast.info('Pinned location set; address lookup failed.');
+                        }
+                      }
+                    }}
+                    mapboxAccessToken="pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A"
+                    style={{ width: '100%', height: '100%' }}
+                    mapStyle="mapbox://styles/mapbox/streets-v11"
+                  >
+                    {!isNaN(markerPosition.latitude) && !isNaN(markerPosition.longitude) && (
+                      <Marker
+                        latitude={markerPosition.latitude}
+                        longitude={markerPosition.longitude}
+                        draggable
+                        onDragEnd={async (evt: any) => {
+                          const { longitude, latitude } = extractFromMapEvent(evt);
+                          if (!isNaN(latitude) && !isNaN(longitude)) {
+                            setMarkerPosition({ latitude, longitude });
+                            try {
+                              const loc = await reverseGeocode(latitude, longitude);
+                              setFormData((prev) => ({
+                                ...prev,
+                                street: loc.street || '',
+                                city: loc.city || '',
+                                state: loc.state || '',
+                                zipCode: loc.zipCode || '',
+                                country: loc.country || '',
+                              }));
+                            } catch {
+                              toast.info('Pinned location set; address lookup failed.');
+                            }
+                          }
+                        }}
+                      >
+                        <div className="relative">
+                          <div className="animate-ping absolute -inset-1 bg-red-400 rounded-full opacity-75"></div>
+                          <MapPin className="h-8 w-8 text-red-600 relative" fill="currentColor" />
+                        </div>
+                      </Marker>
+                    )}
+                  </Map>
+                </div>
+
                 <LocationSearchBox
                   onLocationSelect={handleLocationSelect}
                   onGoToCurrentLocation={handleGoToCurrentLocation}
                 />
-              </div>
 
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Street Address</label>
+                <div className="grid grid-cols-1 gap-4 mt-4">
                   <input
                     type="text"
                     required
-                    className="w-full px-3 py-2 rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
+                    className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                     value={formData.street}
                     onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                    placeholder="Street Address"
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">City</label>
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <input
                       type="text"
                       required
-                      className="w-full px-3 py-2 rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       value={formData.city}
                       onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="City"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">State</label>
                     <input
                       type="text"
                       required
-                      className="w-full px-3 py-2 rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       value={formData.state}
                       onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      placeholder="State"
                     />
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">ZIP Code</label>
+                  <div className="grid grid-cols-2 gap-4">
                     <input
                       type="text"
                       required
-                      className="w-full px-3 py-2 rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       value={formData.zipCode}
                       onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
+                      placeholder="ZIP Code"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">Country</label>
                     <input
                       type="text"
                       required
-                      className="w-full px-3 py-2 rounded-md border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       value={formData.country}
                       onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      placeholder="Country"
                     />
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleGoToCurrentLocation}
-                  className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow"
-                >
-                  <MapPin className="h-4 w-4" />
-                  Use current location
-                </button>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow-sm border border-gray-100 dark:border-gray-800 text-sm text-gray-600 dark:text-gray-300">
-              <strong className="block mb-2 text-gray-800 dark:text-gray-200">Tips</strong>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Use an accurate street address for better search results.</li>
-                <li>Add clear photos showing entrance & parking layout.</li>
-                <li>Set price and slots correctly to reduce cancellations.</li>
+            {/* Tips Card */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl shadow-lg border border-blue-200 dark:border-blue-800 p-6">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+                <Info className="h-5 w-5" />
+                Pro Tips for Success
+              </h3>
+              <ul className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+                <li className="flex items-start gap-2">
+                  <Star className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>Use high-quality photos showing entrance and parking layout</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Star className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>Set competitive prices with occasional discounts to attract customers</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Star className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>Be accurate about availability to maintain good ratings</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <Star className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>Highlight unique amenities to stand out from competitors</span>
+                </li>
               </ul>
             </div>
-          </aside>
+          </div>
         </div>
       </div>
     </div>

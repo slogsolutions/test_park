@@ -53,24 +53,60 @@ export default function ParkingSpaceList({ spaces, onSpaceSelect }: ParkingListP
     return FaCar;
   };
 
-  const formatPrice = (price: number) => {
+  // Format price in INR — show two decimals for discounted price, round for base optionally
+  const formatPrice = (price: number, cents = true) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
-      maximumFractionDigits: 0
+      maximumFractionDigits: cents ? 2 : 0
     }).format(price);
+  };
+
+  // compute discounted price meta for a space (non-destructive)
+  const computeDiscountedPrice = (space: any) => {
+    // Prefer explicit fields in this order (matches your DB): priceParking, pricePerHour, price
+    const baseRaw = space?.priceParking ?? space?.pricePerHour ?? space?.price ?? 0;
+    const base = Number(baseRaw) || 0;
+
+    // The discount might come as string or number; coerce safely
+    const rawDiscount = space?.discount ?? 0;
+    const discount = Number(rawDiscount);
+    const clamped = Number.isFinite(discount) ? Math.max(0, Math.min(100, discount)) : 0;
+
+    const discounted = +(base * (1 - clamped / 100)).toFixed(2);
+
+    return {
+      basePrice: +base.toFixed(2),
+      discountPercent: clamped,
+      discountedPrice: discounted,
+      hasDiscount: clamped > 0 && discounted < base,
+    };
   };
 
   return (
     <div className="space-y-3 p-3 max-h-[calc(100vh-280px)] overflow-auto bg-gradient-to-b from-blue-50 to-purple-50">
       {spaces.map((space, index) => {
-        const address: any = space.address || {};
+        const address: any = (space as any).address || {};
         const street = address.street || 'Address not specified';
         const city = address.city || 'Location not specified';
         const amenities = Array.isArray(space.amenities) ? space.amenities : [];
-        const price = space.pricePerHour ?? space.price ?? 0;
         const rating = typeof space.rating === 'number' ? space.rating : 0;
-        const availableSpaces = space.availableSpaces || 1;
+        const availableSpaces = space.availableSpots || 1;
+
+        // Prefer precomputed __price, but always compute a fallback (so list never misses it)
+        const priceMetaFromProp = (space as any).__price;
+        const computedMeta = computeDiscountedPrice(space as any);
+        const priceMeta = priceMetaFromProp ?? computedMeta;
+
+        const basePrice = priceMeta.basePrice;
+        const discountedPrice = priceMeta.discountedPrice;
+        const hasDiscount = priceMeta.hasDiscount;
+        const discountPercent = priceMeta.discountPercent;
+
+        // debug: see which items have discounts (remove console.debug in production)
+        if (hasDiscount) {
+          console.debug(`[ParkingSpaceList] discount detected for ${space._id ?? 'unknown id'} -> ${discountPercent}%`);
+        }
 
         const key = typeof space._id === 'object' && (space._id as any).toString 
           ? (space._id as any).toString() 
@@ -85,21 +121,37 @@ export default function ParkingSpaceList({ spaces, onSpaceSelect }: ParkingListP
             onKeyDown={(e) => { 
               if (e.key === 'Enter' || e.key === ' ') onSpaceSelect(space); 
             }}
-            className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 transform hover:-translate-y-1 border border-white/30 overflow-hidden hover:border-blue-300"
+            className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 transform hover:-translate-y-1 border border-white/30 overflow-hidden hover:border-blue-300 relative"
           >
             {/* Image Section */}
             <div className="relative h-28 bg-gradient-to-br from-blue-100 to-purple-200 overflow-hidden">
               <img
-                src={space.imageUrl || space.image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'}
+                src={(space as any).imageUrl || (space as any).image || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80'}
                 alt={space.title || 'Parking space'}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent"></div>
               
-              {/* Price Badge */}
-              <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm px-2 py-1 rounded-lg shadow-lg border border-white/20">
-                <span className="font-bold text-blue-600">{formatPrice(price)}</span>
-                <span className="text-xs text-gray-500 ml-1">/hr</span>
+              {/* Price Badge (supports discount display) */}
+              <div className="absolute top-2 right-2 bg-white/95 backdrop-blur-sm px-3 py-2 rounded-lg shadow-lg border border-white/20 flex items-center gap-3">
+                {hasDiscount ? (
+                  <div className="flex flex-col items-end">
+                    <div className="text-xs text-gray-400 line-through leading-none">{formatPrice(basePrice, false)}</div>
+                    <div className="text-lg font-bold text-green-700 leading-none">{formatPrice(discountedPrice, true)}</div>
+                    <div className="text-xs text-gray-500">/hr</div>
+                  </div>
+                ) : (
+                  <div className="flex items-baseline gap-1">
+                    <span className="font-bold text-blue-600">{formatPrice(basePrice, false)}</span>
+                    <span className="text-xs text-gray-500">/hr</span>
+                  </div>
+                )}
+
+                {hasDiscount && (
+                  <div className="ml-2 text-xs font-semibold bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-0.5 rounded">
+                    {discountPercent}% OFF
+                  </div>
+                )}
               </div>
 
               {/* Rating Badge */}
@@ -160,7 +212,7 @@ export default function ParkingSpaceList({ spaces, onSpaceSelect }: ParkingListP
                 <div className="flex items-center text-xs text-gray-500">
                   <span className="flex items-center mr-2 bg-gray-100 px-1.5 py-0.5 rounded-full">
                     <FaClock className="mr-0.5 text-blue-500 text-xs" />
-                    {space.available24_7 ? '24/7' : 'Limited hrs'}
+                    {(space as any).available24_7 ? '24/7' : 'Limited hrs'}
                   </span>
                 </div>
                 

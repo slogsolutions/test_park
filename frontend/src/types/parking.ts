@@ -9,6 +9,8 @@ export interface ParkingSpace {
   distance?: number;
   description?: string;
   photos?: string[];
+  
+  priceParking?: number; // in INR
 }
 
 export interface ParkingFormData {

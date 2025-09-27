@@ -53,6 +53,46 @@ const getAmenityIcon = (amenity: string) => {
   return FaCar;
 };
 
+// Format a number as INR currency
+const formatINR = (value: number, showCents = false) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: showCents ? 2 : 0,
+  }).format(value);
+
+// Compute price metadata (base, discountPercent, discountedPrice, hasDiscount)
+const computePriceMeta = (space: any) => {
+  // Use priceParking, then price, fallback 0
+  const baseRaw = space?.priceParking ?? space?.price ?? 0;
+  const base = Number(baseRaw) || 0;
+
+  // Try multiple discount keys that might come from backend or FormData
+  let rawDiscount = space?.discount ?? space?.discountPercent ?? space?.discount_percentage ?? 0;
+
+  // If discount is a string like "10%" remove %
+  if (typeof rawDiscount === 'string') {
+    rawDiscount = rawDiscount.replace?.('%', '') ?? rawDiscount;
+  }
+
+  // If discount is an object, try to pluck a numeric member
+  if (typeof rawDiscount === 'object' && rawDiscount !== null) {
+    rawDiscount = rawDiscount.percent ?? rawDiscount.value ?? rawDiscount.amount ?? 0;
+  }
+
+  const discountNum = Number(rawDiscount);
+  const discountPercent = Number.isFinite(discountNum) ? Math.max(0, Math.min(100, discountNum)) : 0;
+  const discountedPrice = +(base * (1 - discountPercent / 100)).toFixed(2);
+  const hasDiscount = discountPercent > 0 && discountedPrice < base;
+
+  return {
+    basePrice: +base.toFixed(2),
+    discountPercent,
+    discountedPrice,
+    hasDiscount,
+  };
+};
+
 export default function ParkingSpaceList({
   spaces,
   onSpaceSelect,
@@ -69,7 +109,7 @@ export default function ParkingSpaceList({
       space.location.coordinates[0]
     );
 
-    // Check if within search radius
+    // Check if within search radius (searchRadius is meters; distance is km)
     if (distance > searchRadius / 1000) return false;
 
     // Check amenities
@@ -81,13 +121,13 @@ export default function ParkingSpaceList({
       }
     }
 
-    // Check price range
-    const price = space.pricePerHour ?? space.price ?? 0;
+    // Check price range (use pre-discount price for filtering to avoid surprising results)
+    const price = Number(space.priceParking ?? space.price ?? 0);
     if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
       return false;
     }
 
-    // Add distance property to the space
+    // Add distance property to the space (so parent can reuse if desired)
     space.distance = distance;
     return true;
   });
@@ -112,15 +152,21 @@ export default function ParkingSpaceList({
       {filteredSpaces.map((space: any) => {
         const address: any = space.address || {};
         const amenities = Array.isArray(space.amenities) ? space.amenities : [];
-        const price = space.pricePerHour ?? space.price ?? 0;
         const rating = typeof space.rating === 'number' ? space.rating : 0;
-        const availableSpots = space.availableSpots || 1;
+        const availableSpots = space.availableSpots;
+
+        // price meta (keeps your existing values if backend already attached __price)
+        const priceMeta = (space as any).__price ?? computePriceMeta(space);
+        const basePrice = priceMeta.basePrice;
+        const discountedPrice = priceMeta.discountedPrice;
+        const hasDiscount = priceMeta.hasDiscount;
+        const discountPercent = priceMeta.discountPercent;
 
         return (
           <div
             key={space._id}
             onClick={() => onSpaceSelect(space)}
-            className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-0.5 border border-white/30 overflow-hidden hover:border-blue-300"
+            className="group bg-white/90 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-0.5 border border-white/30 overflow-hidden hover:border-blue-300 relative"
           >
             <div className="p-3">
               {/* Header Row */}
@@ -139,9 +185,23 @@ export default function ParkingSpaceList({
                 
                 {/* Price and Rating */}
                 <div className="text-right ml-2 flex-shrink-0">
-                  <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-1 rounded-lg text-sm font-bold">
-                    ₹{price}/hr
-                  </div>
+                  {/* Discount-aware price UI */}
+                  {hasDiscount ? (
+                    <div className="flex flex-col items-end">
+                      <div className="text-xs text-gray-400 line-through">{formatINR(basePrice, false)}</div>
+                      <div className="text-lg font-bold text-green-700">{formatINR(discountedPrice, true)}</div>
+                      <div className="text-[10px] mt-1 inline-block bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-0.5 rounded font-semibold">
+                        {discountPercent}% OFF
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">/hr</div>
+                    </div>
+                  ) : (
+                    <div className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 py-1 rounded-lg text-sm font-bold">
+                      {formatINR(basePrice, false)}
+                      <span className="text-xs ml-1">/hr</span>
+                    </div>
+                  )}
+
                   {rating > 0 && (
                     <div className="flex items-center justify-end mt-1">
                       <FaStar className="text-yellow-400 text-xs mr-1" />

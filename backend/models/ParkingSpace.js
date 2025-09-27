@@ -1,3 +1,4 @@
+// models/ParkingSpace.js
 import mongoose from "mongoose";
 
 const parkingSpaceSchema = new mongoose.Schema({
@@ -49,6 +50,13 @@ const parkingSpaceSchema = new mongoose.Schema({
   pricePerHour: {
     type: Number,
     required: true,
+  },
+  // NEW: discount percentage (0-100)
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100,
   },
   availability: [
     {
@@ -104,9 +112,21 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+},
+{
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 });
 
 parkingSpaceSchema.index({ location: "2dsphere" });
+
+// Virtual: discountedPrice based on pricePerHour and discount
+parkingSpaceSchema.virtual('discountedPrice').get(function() {
+  const price = Number(this.pricePerHour || 0);
+  const discount = Number(this.discount || 0);
+  const dp = price * (1 - discount / 100);
+  return Number(dp.toFixed(2));
+});
 
 // Prevent OverwriteModelError
 export default mongoose.models.ParkfindersecondParkingSpace ||
