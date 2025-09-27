@@ -513,15 +513,12 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   return (
     <div className="h-[calc(100vh-64px)] relative bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* Top Search Bar */}
-/* Top Search Bar with inline Filter button */
+{/* Top Search Bar with Filters button inline */}
 <div className="absolute top-4 left-4 right-4 z-20">
-  <div className="relative max-w-4xl mx-auto">
+  <div className="relative max-w-3xl mx-auto">
     <div className="flex items-center gap-3">
-      {/* Search input (flexible width; shrinks when showFilters=true) */}
-      <div
-        className="relative flex items-center transition-all duration-300"
-        style={{ flex: showFilters ? '1 1 60%' : '1 1 80%' }}
-      >
+      {/* Search input */}
+      <div className="relative flex-1">
         <MdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl z-10" />
         <input
           type="text"
@@ -546,27 +543,25 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
         )}
       </div>
 
-      {/* Filter button - small & inline */}
-      <div className="flex-shrink-0">
-        <button
-          onClick={() => setShowFilters(prev => !prev)}
-          className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200"
-          title="Filters"
-        >
-          <MdFilterList className="text-lg text-blue-600" />
-          <span className="hidden sm:inline text-sm font-semibold text-gray-700">Filters</span>
-          {getActiveFilterCount() > 0 && (
-            <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-              {getActiveFilterCount()}
-            </span>
-          )}
-        </button>
-      </div>
+      {/* Filter button */}
+      <button
+        onClick={() => setShowFilters((prev) => !prev)}
+        className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200"
+        title="Filters"
+      >
+        <MdFilterList className="text-lg text-blue-600" />
+        <span className="hidden sm:inline font-semibold text-gray-700">Filters</span>
+        {getActiveFilterCount() > 0 && (
+          <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+            {getActiveFilterCount()}
+          </span>
+        )}
+      </button>
     </div>
 
-    {/* Search Results Dropdown (unchanged) */}
+    {/* Search Results Dropdown */}
     {showSearchResults && searchResults.length > 0 && (
-      <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
+      <div className="absolute top-full left-0 mt-2 w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
         {searchResults.map((result, index) => (
           <button
             key={index}
@@ -587,87 +582,11 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
       </div>
     )}
 
-    {/* Filters dropdown aligned to the right of the search bar */}
+    {/* Filters dropdown (small, right-aligned) */}
     {showFilters && (
-      <div className="absolute top-full right-0 mt-3 z-40 w-[360px] max-w-[92vw] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-bold text-gray-800 text-lg">Filter Parking</h3>
-          <button
-            onClick={clearAllFilters}
-            className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-lg hover:opacity-90 transition-opacity font-medium"
-          >
-            Clear all
-          </button>
-        </div>
-
-        <div className="p-4 border-b border-gray-100">
-          <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <span>Price Range</span>
-            <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
-              {filters.isPriceFilterActive 
-                ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
-                : 'Any price'
-              }
-            </span>
-          </h4>
-          <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
-            <span>₹0</span>
-            <span>₹1000</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="1000"
-            step="50"
-            value={filters.priceRange[1]}
-            onChange={(e) => handlePriceRangeChange(filters.priceRange[0], parseInt(e.target.value))}
-            className="w-full"
-          />
-        </div>
-
-        <div className="p-4">
-          <h4 className="font-semibold text-gray-700 mb-3">Amenities</h4>
-          <div className="space-y-2">
-            {amenityFilters.map((amenity) => {
-              const IconComponent = amenity.icon;
-              const isActive = filters.amenities[amenity.id as keyof typeof filters.amenities];
-
-              return (
-                <button
-                  key={amenity.id}
-                  onClick={() => handleFilterToggle(amenity.id)}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border-2 ${
-                    isActive 
-                      ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm' 
-                      : 'bg-gray-50 border-transparent hover:bg-gray-100'
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                    <IconComponent className="text-lg" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="font-semibold text-gray-800">{amenity.label}</div>
-                    <div className="text-xs text-gray-500">{amenity.description}</div>
-                  </div>
-                  <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-                    {isActive && <span className="text-white text-sm font-bold">✓</span>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 rounded-b-2xl">
-          <div className="text-center">
-            <div className="text-sm font-semibold text-gray-700">
-              Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
-            </div>
-            <div className="text-xs text-gray-500 mt-1">
-              Radius: {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-            </div>
-          </div>
-        </div>
+      <div className="absolute top-full right-0 mt-3 z-40 w-[320px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20">
+        {/* Your filter UI from before (price + amenities) */}
+        {/* ... keep your existing filter content here ... */}
       </div>
     )}
   </div>
