@@ -36,11 +36,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  // add near other useState hooks
-const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  
-  // Filters state - removed default price filter
+  // Filters state
   const [filters, setFilters] = useState({
     amenities: {
       covered: false,
@@ -50,44 +48,17 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
       wheelchair: false,
     },
     priceRange: [0, 1000],
-    isPriceFilterActive: false, // New state to track if price filter is active
+    isPriceFilterActive: false,
   });
 
-  // Filter amenities configuration
   const amenityFilters = [
-    {
-      id: 'covered',
-      label: 'Covered',
-      icon: FaUmbrella,
-      description: 'Protected from weather'
-    },
-    {
-      id: 'security',
-      label: 'Security',
-      icon: FaShieldAlt,
-      description: '24/7 security guard'
-    },
-    {
-      id: 'charging',
-      label: 'EV Charging',
-      icon: FaBolt,
-      description: 'Electric vehicle charging'
-    },
-    {
-      id: 'cctv',
-      label: 'CCTV',
-      icon: FaVideo,
-      description: 'Surveillance cameras'
-    },
-    {
-      id: 'wheelchair',
-      label: 'Accessible',
-      icon: FaWheelchair,
-      description: 'Wheelchair accessible'
-    }
+    { id: 'covered', label: 'Covered', icon: FaUmbrella, description: 'Protected from weather' },
+    { id: 'security', label: 'Security', icon: FaShieldAlt, description: '24/7 security guard' },
+    { id: 'charging', label: 'EV Charging', icon: FaBolt, description: 'Electric vehicle charging' },
+    { id: 'cctv', label: 'CCTV', icon: FaVideo, description: 'Surveillance cameras' },
+    { id: 'wheelchair', label: 'Accessible', icon: FaWheelchair, description: 'Wheelchair accessible' },
   ];
 
-  // Apply filters whenever parkingSpaces, filters, or searchQuery change
   useEffect(() => {
     if (parkingSpaces.length === 0) {
       setFilteredSpaces([]);
@@ -95,20 +66,18 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     }
 
     let filtered = parkingSpaces.filter(space => {
-      // Search query filter
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
         const matchesTitle = space.title?.toLowerCase().includes(query);
         const matchesDescription = space.description?.toLowerCase().includes(query);
-        const matchesAddress = space.address?.street?.toLowerCase().includes(query) || 
-                              space.address?.city?.toLowerCase().includes(query);
-        
+        const matchesAddress = space.address?.street?.toLowerCase().includes(query) ||
+          space.address?.city?.toLowerCase().includes(query);
+
         if (!matchesTitle && !matchesDescription && !matchesAddress) {
           return false;
         }
       }
 
-      // Price filter - only apply if user explicitly activated it
       if (filters.isPriceFilterActive) {
         const price = space.priceParking ?? space.price ?? 0;
         const [minPrice, maxPrice] = filters.priceRange;
@@ -117,7 +86,6 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
         }
       }
 
-      // Amenities filter
       const activeAmenityFilters = Object.entries(filters.amenities)
         .filter(([_, isActive]) => isActive)
         .map(([amenity]) => amenity);
@@ -125,13 +93,13 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
       if (activeAmenityFilters.length > 0) {
         const spaceAmenities = space.amenities || [];
         const spaceAmenitiesLower = spaceAmenities.map(amenity => amenity.toLowerCase());
-        
-        const hasAllSelectedAmenities = activeAmenityFilters.every(amenityFilter => 
-          spaceAmenitiesLower.some(spaceAmenity => 
+
+        const hasAllSelectedAmenities = activeAmenityFilters.every(amenityFilter =>
+          spaceAmenitiesLower.some(spaceAmenity =>
             spaceAmenity.includes(amenityFilter.toLowerCase())
           )
         );
-        
+
         if (!hasAllSelectedAmenities) {
           return false;
         }
@@ -143,22 +111,20 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     setFilteredSpaces(filtered);
   }, [parkingSpaces, filters, searchQuery]);
 
-  // Debounced popup close function
   const debouncedClosePopup = useCallback(() => {
     if (popupTimeout) {
       clearTimeout(popupTimeout);
     }
-    
+
     if (!isPopupHovered) {
       const timeout = setTimeout(() => {
         setSelectedSpace(null);
       }, 300);
-      
+
       setPopupTimeout(timeout);
     }
   }, [popupTimeout, isPopupHovered]);
 
-  // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (popupTimeout) {
@@ -193,9 +159,9 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const setDefaultLocation = () => {
     const defaultLat = 28.6139;
     const defaultLng = 77.2090;
-    setViewport({ 
-      ...viewport, 
-      latitude: defaultLat, 
+    setViewport({
+      ...viewport,
+      latitude: defaultLat,
       longitude: defaultLng,
       zoom: 12
     });
@@ -213,9 +179,9 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords;
-        setViewport({ 
-          ...viewport, 
-          latitude, 
+        setViewport({
+          ...viewport,
+          latitude,
           longitude,
           zoom: 14
         });
@@ -260,7 +226,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
       setLoading(true);
       const spaces = await parkingService.getNearbySpaces(lat, lng, searchRadius);
       setParkingSpaces(spaces || []);
-      
+
       if (spaces && spaces.length > 0) {
         setTimeout(() => {
           setViewport(prev => ({
@@ -298,7 +264,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     if (popupTimeout) {
       clearTimeout(popupTimeout);
     }
-    
+
     setViewport((prev) => ({
       ...prev,
       latitude: space.location.coordinates[1],
@@ -353,7 +319,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     setFilters(prev => ({
       ...prev,
       priceRange: [min, max],
-      isPriceFilterActive: true // Activate price filter when user changes it
+      isPriceFilterActive: true
     }));
   };
 
@@ -367,7 +333,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
         wheelchair: false,
       },
       priceRange: [0, 1000],
-      isPriceFilterActive: false, // Reset price filter active state
+      isPriceFilterActive: false,
     });
     setSearchQuery('');
   };
@@ -423,12 +389,11 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const routeSourceData = routeData
     ? {
-        type: 'Feature',
-        geometry: routeData.geometry,
-      }
+      type: 'Feature',
+      geometry: routeData.geometry,
+    }
     : null;
 
-  // Real geocoding function using Mapbox API
   const searchLocations = async (query: string) => {
     if (query.length < 3) {
       setSearchResults([]);
@@ -466,11 +431,11 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const handleLocationSelect = async (result: GeocodingResult) => {
     setSearchedLocation({ lat: result.latitude, lng: result.longitude });
     setSearchQuery(result.address || '');
-    setViewport({ 
-      ...viewport, 
-      longitude: result.longitude, 
+    setViewport({
+      ...viewport,
+      longitude: result.longitude,
       latitude: result.latitude,
-      zoom: 14 
+      zoom: 14
     });
     setShowSearchResults(false);
 
@@ -478,7 +443,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
       setLoading(true);
       const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, searchRadius);
       setParkingSpaces(spaces || []);
-      
+
       if (!spaces || spaces.length === 0) {
         toast.info('No parking spaces found in this area. Try increasing the search radius.');
       } else {
@@ -512,86 +477,165 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   return (
     <div className="h-[calc(100vh-64px)] relative bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Top Search Bar */}
-{/* Top Search Bar with Filters button inline */}
-<div className="absolute top-4 left-4 right-4 z-20">
-  <div className="relative max-w-3xl mx-auto">
-    <div className="flex items-center gap-3">
-      {/* Search input */}
-      <div className="relative flex-1">
-        <MdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl z-10" />
-        <input
-          type="text"
-          placeholder="Search for locations, areas, or landmarks..."
-          value={searchQuery}
-          onChange={(e) => handleSearchInputChange(e.target.value)}
-          className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-2xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-medium placeholder-gray-500 transition-all duration-300"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => {
-              setSearchQuery('');
-              setShowSearchResults(false);
-              if (currentLocation) {
-                fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-              }
-            }}
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <MdClose className="text-xl" />
-          </button>
-        )}
-      </div>
+      {/* Top Search Bar with Filters button inline */}
+      <div className="absolute top-4 left-4 right-4 z-20">
+        <div className="relative max-w-3xl mx-auto">
+          <div className="flex items-center gap-3">
+            {/* Search input (shrinks when showFilters true) */}
+            <div
+              className="relative transition-all duration-300"
+              style={{ flex: showFilters ? '1 1 65%' : '1 1 85%' }}
+            >
+              <MdSearch className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 text-xl z-10" />
+              <input
+                type="text"
+                placeholder="Search for locations, areas, or landmarks..."
+                value={searchQuery}
+                onChange={(e) => handleSearchInputChange(e.target.value)}
+                className="w-full pl-12 pr-4 py-4 bg-white/95 backdrop-blur-sm border border-white/20 rounded-2xl shadow-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg font-medium placeholder-gray-500 transition-all duration-300"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowSearchResults(false);
+                    if (currentLocation) {
+                      fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
+                    }
+                  }}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <MdClose className="text-xl" />
+                </button>
+              )}
+            </div>
 
-      {/* Filter button */}
-      <button
-        onClick={() => setShowFilters((prev) => !prev)}
-        className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200"
-        title="Filters"
-      >
-        <MdFilterList className="text-lg text-blue-600" />
-        <span className="hidden sm:inline font-semibold text-gray-700">Filters</span>
-        {getActiveFilterCount() > 0 && (
-          <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-            {getActiveFilterCount()}
-          </span>
-        )}
-      </button>
-    </div>
+            {/* Filter button (immediately after search) */}
+            <button
+              onClick={() => setShowFilters((prev) => !prev)}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/95 backdrop-blur-sm border border-white/20 shadow hover:shadow-md transition-all duration-200"
+              title="Filters"
+            >
+              <MdFilterList className="text-lg text-blue-600" />
+              <span className="hidden sm:inline font-semibold text-gray-700">Filters</span>
+              {getActiveFilterCount() > 0 && (
+                <span className="ml-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {getActiveFilterCount()}
+                </span>
+              )}
+            </button>
+          </div>
 
-    {/* Search Results Dropdown */}
-    {showSearchResults && searchResults.length > 0 && (
-      <div className="absolute top-full left-0 mt-2 w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
-        {searchResults.map((result, index) => (
-          <button
-            key={index}
-            onClick={() => handleLocationSelect(result)}
-            className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
-          >
-            <MdLocationOn className="text-blue-500 text-xl flex-shrink-0" />
-            <div className="text-left">
-              <div className="font-medium text-gray-900 text-sm">
-                {result.address.split(',')[0]}
+          {/* Search Results Dropdown */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 mt-2 w-full bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden z-30 max-h-48 overflow-y-auto">
+              {searchResults.map((result, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleLocationSelect(result)}
+                  className="w-full px-4 py-3 text-left hover:bg-blue-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                >
+                  <MdLocationOn className="text-blue-500 text-xl flex-shrink-0" />
+                  <div className="text-left">
+                    <div className="font-medium text-gray-900 text-sm">
+                      {result.address.split(',')[0]}
+                    </div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {result.address.split(',').slice(1).join(',').trim()}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Filters dropdown (right-aligned small panel) */}
+          {showFilters && (
+            <div className="absolute top-full right-0 mt-3 z-40 w-[320px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20 overflow-hidden">
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="font-bold text-gray-800 text-lg">Filter Parking</h3>
+                <button
+                  onClick={clearAllFilters}
+                  className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white px-3 py-1 rounded-lg hover:opacity-90 transition-opacity font-medium"
+                >
+                  Clear all
+                </button>
               </div>
-              <div className="text-xs text-gray-500 truncate">
-                {result.address.split(',').slice(1).join(',').trim()}
+
+              <div className="p-4 border-b border-gray-100">
+                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                  <span>Price Range</span>
+                  <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
+                    {filters.isPriceFilterActive
+                      ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
+                      : 'Any price'
+                    }
+                  </span>
+                </h4>
+                <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
+                  <span>₹0</span>
+                  <span>₹1000</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1000"
+                  step="50"
+                  value={filters.priceRange[1]}
+                  onChange={(e) => handlePriceRangeChange(filters.priceRange[0], parseInt(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              <div className="p-4">
+                <h4 className="font-semibold text-gray-700 mb-3">Amenities</h4>
+                <div className="space-y-2">
+                  {amenityFilters.map((amenity) => {
+                    const IconComponent = amenity.icon;
+                    const isActive = filters.amenities[amenity.id as keyof typeof filters.amenities];
+
+                    return (
+                      <button
+                        key={amenity.id}
+                        onClick={() => handleFilterToggle(amenity.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border-2 ${
+                          isActive
+                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm'
+                            : 'bg-gray-50 border-transparent hover:bg-gray-100'
+                        }`}
+                      >
+                        <div className={`p-2 rounded-lg ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                          <IconComponent className="text-lg" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <div className="font-semibold text-gray-800">{amenity.label}</div>
+                          <div className="text-xs text-gray-500">{amenity.description}</div>
+                        </div>
+                        <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500' : 'bg-white border-gray-300'
+                        }`}>
+                          {isActive && <span className="text-white text-sm font-bold">✓</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 rounded-b-2xl">
+                <div className="text-center">
+                  <div className="text-sm font-semibold text-gray-700">
+                    Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Radius: {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
+                  </div>
+                </div>
               </div>
             </div>
-          </button>
-        ))}
+          )}
+        </div>
       </div>
-    )}
-
-    {/* Filters dropdown (small, right-aligned) */}
-    {showFilters && (
-      <div className="absolute top-full right-0 mt-3 z-40 w-[320px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20">
-        {/* Your filter UI from before (price + amenities) */}
-        {/* ... keep your existing filter content here ... */}
-      </div>
-    )}
-  </div>
-</div>
-
 
       {/* Current Location Button */}
       <div className="absolute bottom-24 right-4 z-10">
@@ -676,118 +720,106 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
         </Map>
       </div>
 
-      {/* Parking List Sidebar */}
-/* Collapsible Left Sidebar (replace the previous Parking List Sidebar block) */
-{/* Sidebar Toggle Button (left center) */}
-<div className="fixed left-2 top-1/2 transform -translate-y-1/2 z-40">
-  <button
-    onClick={() => setIsSidebarOpen(prev => !prev)}
-    aria-label={isSidebarOpen ? "Close parking list" : "Open parking list"}
-    className="w-12 h-12 rounded-xl shadow-2xl bg-white/95 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:scale-105 transition-transform"
-    title={isSidebarOpen ? "Hide list" : "Show list"}
-  >
-    {/* simple chevron icon, rotate when open */}
-    <svg
-      className={`w-6 h-6 text-blue-600 transform transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
-      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-    >
-      <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  </button>
-</div>
+      {/* Collapsible Left Sidebar */}
+      <div className="fixed left-2 top-1/2 transform -translate-y-1/2 z-40">
+        <button
+          onClick={() => setIsSidebarOpen(prev => !prev)}
+          aria-label={isSidebarOpen ? "Close parking list" : "Open parking list"}
+          className="w-12 h-12 rounded-xl shadow-2xl bg-white/95 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:scale-105 transition-transform"
+          title={isSidebarOpen ? "Hide list" : "Show list"}
+        >
+          <svg
+            className={`w-6 h-6 text-blue-600 transform transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          >
+            <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      </div>
 
-{/* Sidebar Drawer */}
-<div
-  className={`fixed left-0 top-0 z-30 h-full w-[360px] max-w-[92vw] bg-white/95 backdrop-blur-sm rounded-r-2xl shadow-2xl border border-white/20 overflow-hidden transform transition-transform duration-300
-    ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[380px]'}
-    lg:translate-x-0 lg:static lg:h-[480px] lg:top-20 lg:left-4 lg:max-w-xs lg:rounded-2xl`}
-  style={{ top: 0 /* ensures full-height drawer on mobile when open */ }}
->
-  {/* Mobile: close button inside header */}
-  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white flex items-start justify-between">
-    <div>
-      <h2 className="text-xl font-bold mb-1">Find your perfect parking...</h2>
-      <p className="text-blue-100 text-sm opacity-90">Discover ideal spots tailored for you</p>
-    </div>
-    <button
-      onClick={() => setIsSidebarOpen(false)}
-      className="ml-2 p-2 rounded-lg bg-white/10 hover:bg-white/20"
-      aria-label="Close"
-    >
-      <MdClose className="text-lg text-white" />
-    </button>
-  </div>
-
-  {/* Search and Controls Section */}
-  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
-    <div className="flex gap-3">
-      {/* Current Location Search */}
-      <button
-        onClick={handleSearchByCurrentLocation}
-        className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold shadow-lg hover:shadow-xl"
+      <div
+        className={`fixed left-0 top-0 z-30 h-full w-[360px] max-w-[92vw] bg-white/95 backdrop-blur-sm rounded-r-2xl shadow-2xl border border-white/20 overflow-hidden transform transition-transform duration-300
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[380px]'}
+          lg:translate-x-0 lg:static lg:h-[480px] lg:top-20 lg:left-4 lg:max-w-xs lg:rounded-2xl`}
+        style={{ top: 0 }}
       >
-        <MdMyLocation className="text-lg" />
-        <span>Near Me</span>
-      </button>
-
-      {/* Radius Control */}
-      <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-600 font-semibold">Search Radius</span>
-          <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-            {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-          </span>
+        <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold mb-1">Find your perfect parking...</h2>
+            <p className="text-blue-100 text-sm opacity-90">Discover ideal spots tailored for you</p>
+          </div>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="ml-2 p-2 rounded-lg bg-white/10 hover:bg-white/20"
+            aria-label="Close"
+          >
+            <MdClose className="text-lg text-white" />
+          </button>
         </div>
-        <input
-          type="range"
-          min="1000"
-          max="100000"
-          step="1000"
-          value={searchRadius}
-          onChange={(e) => {
-            const newRadius = parseInt(e.target.value);
-            setSearchRadius(newRadius);
-            if (currentLocation) {
-              fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-            } else if (searchedLocation) {
-              fetchNearbyParkingSpaces(searchedLocation.lat, searchedLocation.lng);
-            }
-          }}
-          className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
-        />
-      </div>
-    </div>
-  </div>
 
-  {/* Parking Spaces List */}
-  <div className="h-[calc(100%-140px)] overflow-auto">
-    <ParkingSpaceList
-      spaces={filteredSpaces}
-      onSpaceSelect={(space) => {
-        handleMarkerClick(space);
-        // close on mobile for better UX
-        if (window.innerWidth < 1024) setIsSidebarOpen(false);
-      }}
-      searchRadius={searchRadius}
-      onRadiusChange={setSearchRadius}
-      filters={filters}
-      userLocation={searchedLocation || currentLocation}
-    />
-  </div>
+        <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="flex gap-3">
+            <button
+              onClick={handleSearchByCurrentLocation}
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold shadow-lg hover:shadow-xl"
+            >
+              <MdMyLocation className="text-lg" />
+              <span>Near Me</span>
+            </button>
 
-  {/* Footer Summary (shows on large screens in top position; on mobile it will act as bottom summary) */}
-  <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
-    <div className="text-center">
-      <div className="text-sm font-semibold text-gray-700">
-        Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
-      </div>
-      <div className="text-xs text-gray-500 mt-1">
-        Radius: {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-      </div>
-    </div>
-  </div>
-</div>
+            <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-600 font-semibold">Search Radius</span>
+                <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
+                  {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1000"
+                max="100000"
+                step="1000"
+                value={searchRadius}
+                onChange={(e) => {
+                  const newRadius = parseInt(e.target.value);
+                  setSearchRadius(newRadius);
+                  if (currentLocation) {
+                    fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
+                  } else if (searchedLocation) {
+                    fetchNearbyParkingSpaces(searchedLocation.lat, searchedLocation.lng);
+                  }
+                }}
+                className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+              />
+            </div>
+          </div>
+        </div>
 
+        <div className="h-[calc(100%-140px)] overflow-auto">
+          <ParkingSpaceList
+            spaces={filteredSpaces}
+            onSpaceSelect={(space) => {
+              handleMarkerClick(space);
+              if (window.innerWidth < 1024) setIsSidebarOpen(false);
+            }}
+            searchRadius={searchRadius}
+            onRadiusChange={setSearchRadius}
+            filters={filters}
+            userLocation={searchedLocation || currentLocation}
+          />
+        </div>
+
+        <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+          <div className="text-center">
+            <div className="text-sm font-semibold text-gray-700">
+              Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              Radius: {searchRadius >= 1000 ? `${(searchRadius / 1000).toFixed(1)} km` : `${searchRadius} m`}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Custom Styles */}
       <style jsx>{`
@@ -801,7 +833,7 @@ const [isSidebarOpen, setIsSidebarOpen] = useState(true);
           border: 2px solid #ffffff;
           box-shadow: 0 4px 10px rgba(59, 130, 246, 0.4);
         }
-        
+
         .slider-thumb::-moz-range-thumb {
           height: 20px;
           width: 20px;
