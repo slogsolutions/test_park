@@ -91,6 +91,9 @@ const upload = multer();
 app.get('/test', (req, res) => {
   res.send({ test: 'done' });
 });
+app.get('/', (req, res) => {
+  res.send({ test: 'server is running' });
+});
 
 /**
  * Optional helper: server-generated reference_id (UUID)

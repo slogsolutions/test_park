@@ -36,6 +36,9 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  // add near other useState hooks
+const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
   
   // Filters state - removed default price filter
   const [filters, setFilters] = useState({
@@ -757,69 +760,117 @@ export default function Home() {
       </div>
 
       {/* Parking List Sidebar */}
-      <div className="absolute top-20 left-4 w-96 z-10 h-[480px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-white/20">
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white">
-          <h2 className="text-xl font-bold mb-1">Find your perfect parking...</h2>
-          <p className="text-blue-100 text-sm opacity-90">Discover ideal spots tailored for you</p>
-        </div>
+/* Collapsible Left Sidebar (replace the previous Parking List Sidebar block) */
+{/* Sidebar Toggle Button (left center) */}
+<div className="fixed left-2 top-1/2 transform -translate-y-1/2 z-40">
+  <button
+    onClick={() => setIsSidebarOpen(prev => !prev)}
+    aria-label={isSidebarOpen ? "Close parking list" : "Open parking list"}
+    className="w-12 h-12 rounded-xl shadow-2xl bg-white/95 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:scale-105 transition-transform"
+    title={isSidebarOpen ? "Hide list" : "Show list"}
+  >
+    {/* simple chevron icon, rotate when open */}
+    <svg
+      className={`w-6 h-6 text-blue-600 transform transition-transform ${isSidebarOpen ? '' : 'rotate-180'}`}
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+    >
+      <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  </button>
+</div>
 
-        {/* Search and Controls Section */}
-        <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
-          {/* Controls Row */}
-          <div className="flex gap-3">
-            {/* Current Location Search */}
-            <button
-              onClick={handleSearchByCurrentLocation}
-              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold shadow-lg hover:shadow-xl"
-            >
-              <MdMyLocation className="text-lg" />
-              <span>Near Me</span>
-            </button>
+{/* Sidebar Drawer */}
+<div
+  className={`fixed left-0 top-0 z-30 h-full w-[360px] max-w-[92vw] bg-white/95 backdrop-blur-sm rounded-r-2xl shadow-2xl border border-white/20 overflow-hidden transform transition-transform duration-300
+    ${isSidebarOpen ? 'translate-x-0' : '-translate-x-[380px]'}
+    lg:translate-x-0 lg:static lg:h-[480px] lg:top-20 lg:left-4 lg:max-w-xs lg:rounded-2xl`}
+  style={{ top: 0 /* ensures full-height drawer on mobile when open */ }}
+>
+  {/* Mobile: close button inside header */}
+  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white flex items-start justify-between">
+    <div>
+      <h2 className="text-xl font-bold mb-1">Find your perfect parking...</h2>
+      <p className="text-blue-100 text-sm opacity-90">Discover ideal spots tailored for you</p>
+    </div>
+    <button
+      onClick={() => setIsSidebarOpen(false)}
+      className="ml-2 p-2 rounded-lg bg-white/10 hover:bg-white/20"
+      aria-label="Close"
+    >
+      <MdClose className="text-lg text-white" />
+    </button>
+  </div>
 
-            {/* Radius Control */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-semibold">Search Radius</span>
-                <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-                  {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1000"
-                max="100000"
-                step="1000"
-                value={searchRadius}
-                onChange={(e) => {
-                  const newRadius = parseInt(e.target.value);
-                  setSearchRadius(newRadius);
-                  if (currentLocation) {
-                    fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-                  } else if (searchedLocation) {
-                    fetchNearbyParkingSpaces(searchedLocation.lat, searchedLocation.lng);
-                  }
-                }}
-                className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
-              />
-            </div>
-          </div>
+  {/* Search and Controls Section */}
+  <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+    <div className="flex gap-3">
+      {/* Current Location Search */}
+      <button
+        onClick={handleSearchByCurrentLocation}
+        className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 font-semibold shadow-lg hover:shadow-xl"
+      >
+        <MdMyLocation className="text-lg" />
+        <span>Near Me</span>
+      </button>
+
+      {/* Radius Control */}
+      <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-gray-600 font-semibold">Search Radius</span>
+          <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
+            {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
+          </span>
         </div>
-        
-        {/* Parking Spaces List */}
-        <div className="h-full overflow-auto">
-          <ParkingSpaceList
-            spaces={filteredSpaces}
-            onSpaceSelect={(space) => {
-              handleMarkerClick(space);
-            }}
-            searchRadius={searchRadius}
-            onRadiusChange={setSearchRadius}
-            filters={filters}
-            userLocation={searchedLocation || currentLocation}
-          />
-        </div>
+        <input
+          type="range"
+          min="1000"
+          max="100000"
+          step="1000"
+          value={searchRadius}
+          onChange={(e) => {
+            const newRadius = parseInt(e.target.value);
+            setSearchRadius(newRadius);
+            if (currentLocation) {
+              fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
+            } else if (searchedLocation) {
+              fetchNearbyParkingSpaces(searchedLocation.lat, searchedLocation.lng);
+            }
+          }}
+          className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+        />
       </div>
+    </div>
+  </div>
+
+  {/* Parking Spaces List */}
+  <div className="h-[calc(100%-140px)] overflow-auto">
+    <ParkingSpaceList
+      spaces={filteredSpaces}
+      onSpaceSelect={(space) => {
+        handleMarkerClick(space);
+        // close on mobile for better UX
+        if (window.innerWidth < 1024) setIsSidebarOpen(false);
+      }}
+      searchRadius={searchRadius}
+      onRadiusChange={setSearchRadius}
+      filters={filters}
+      userLocation={searchedLocation || currentLocation}
+    />
+  </div>
+
+  {/* Footer Summary (shows on large screens in top position; on mobile it will act as bottom summary) */}
+  <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
+    <div className="text-center">
+      <div className="text-sm font-semibold text-gray-700">
+        Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
+      </div>
+      <div className="text-xs text-gray-500 mt-1">
+        Radius: {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
+      </div>
+    </div>
+  </div>
+</div>
+
 
       {/* Custom Styles */}
       <style jsx>{`
