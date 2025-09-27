@@ -3,6 +3,10 @@ import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js';
+import UserToken from '../models/UserToken.js';
+import NotificationService from '../service/NotificationService.js'; // your wrapper for firebase-admin
+
+
 
 // Helper function for sending notifications (placeholder)
 const sendNotification = (email, subject, message) => {
@@ -66,9 +70,297 @@ cleanupOverdueBookings().catch((e) => console.error(e));
 /**
  * Create booking
  */
-// backend/controllers/booking.js
+// OLD WORKING CreateBooking
+// export const createBooking = async (req, res) => {
+//   try {
+//     const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+
+//     // find parking space
+//     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
+//     if (!parkingSpace) {
+//       return res.status(404).json({ message: 'Parking space not found' });
+//     }
+
+//     const { pricePerHour, availability, owner: providerId } = parkingSpace;
+
+//     if (!startTime || !endTime || !pricePerHour) {
+//       return res.status(400).json({ message: "Invalid data for price calculation" });
+//     }
+
+//     // check availability
+//     const requestedStart = new Date(startTime);
+//     const requestedEnd = new Date(endTime);
+//     const isSlotBooked = (availability || []).some(dateObj => {
+//       return (dateObj.slots || []).some(slot => {
+//         const slotStart = new Date(slot.startTime);
+//         const slotEnd = new Date(slot.endTime);
+//         const overlap =
+//           (requestedStart >= slotStart && requestedStart < slotEnd) ||
+//           (requestedEnd > slotStart && requestedEnd <= slotEnd) ||
+//           (requestedStart <= slotStart && requestedEnd >= slotEnd);
+//         return overlap && slot.isBooked;
+//       });
+//     });
+
+//     if (isSlotBooked) {
+//       return res.status(400).json({ message: 'Selected time slot is already booked' });
+//     }
+
+//     // calculate total price
+//     const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
+//     const totalPrice = durationHours * pricePerHour;
+
+//     // create booking: auto-accept and assign providerId so buyer can pay immediately
+//     const booking = new Booking({
+//       user: req.user._id,
+//       parkingSpace: parkingSpaceId,
+//       startTime,
+//       endTime,
+//       totalPrice,
+//       pricePerHour,
+//       vehicleNumber,
+//       vehicleType,
+//       vehicleModel,
+//       contactNumber,
+//       chassisNumber,
+//       providerId: providerId,     // assign owner as provider
+//       status: 'accepted',         // auto-accept so payment can be made immediately
+//       paymentStatus: 'pending'
+//     });
+
+//     await booking.save();
+
+//     // mark availability slot as booked (best-effort)
+//     try {
+//       const startDateMidnight = new Date(startTime);
+//       startDateMidnight.setHours(0, 0, 0, 0);
+
+//       await ParkingSpace.findByIdAndUpdate(
+//         parkingSpaceId,
+//         {
+//           $set: { 'availability.$[dateElem].slots.$[slotElem].isBooked': true }
+//         },
+//         {
+//           arrayFilters: [
+//             { 'dateElem.date': { $eq: startDateMidnight } },
+//             { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }
+//           ],
+//           new: true
+//         }
+//       );
+//     } catch (err) {
+//       console.warn('Warning: failed to mark availability slot (nonfatal)', err);
+//     }
+
+//     // notify provider (best-effort)
+//     try {
+//       const provider = await ParkFinderSecondUser.findById(providerId);
+//       if (provider && provider.email) {
+//         sendNotification(provider.email, 'New Booking Accepted', `A booking for your space (${parkingSpaceId}) has been created and is awaiting payment.`);
+//       }
+//     } catch (err) {
+//       console.warn('Warning: notify provider failed', err);
+//     }
+
+//     return res.status(201).json({ message: 'Booking created and auto-accepted; proceed to payment', booking });
+//   } catch (error) {
+//     console.error('createBooking error', error);
+//     return res.status(500).json({ message: 'Failed to create booking', error: error.message });
+//   }
+// };
+
+
+//My previcous create Booking
+// export const createBooking = async (req, res) => {
+//   try {
+//     console.log("req recieved in /createBooking")
+//     const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
+     
+//     // find parking space
+//     const parkingSpace = await ParkingSpace.findById(parkingSpaceId);
+//     if (!parkingSpace) {
+//       return res.status(404).json({ message: 'Parking space not found' });
+//     }
+
+//     const { pricePerHour, availability, owner: providerId } = parkingSpace;
+
+//     if (!startTime || !endTime || !pricePerHour) {
+//       return res.status(400).json({ message: "Invalid data for price calculation" });
+//     }
+
+//     // check availability
+//     const requestedStart = new Date(startTime);
+//     const requestedEnd = new Date(endTime);
+//     const isSlotBooked = (availability || []).some(dateObj => {
+//       return (dateObj.slots || []).some(slot => {
+//         const slotStart = new Date(slot.startTime);
+//         const slotEnd = new Date(slot.endTime);
+//         const overlap =
+//           (requestedStart >= slotStart && requestedStart < slotEnd) ||
+//           (requestedEnd > slotStart && requestedEnd <= slotEnd) ||
+//           (requestedStart <= slotStart && requestedEnd >= slotEnd);
+//         return overlap && slot.isBooked;
+//       });
+//     });
+
+//     if (isSlotBooked) {
+//       return res.status(400).json({ message: 'Selected time slot is already booked' });
+//     }
+
+//     // calculate total price
+//     const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
+//     const totalPrice = durationHours * pricePerHour;
+
+//     // create booking: auto-accept and assign providerId so buyer can pay immediately
+//     const booking = new Booking({
+//       user: req.user._id,
+//       parkingSpace: parkingSpaceId,
+//       startTime,
+//       endTime,
+//       totalPrice,
+//       pricePerHour,
+//       vehicleNumber,
+//       vehicleType,
+//       vehicleModel,
+//       contactNumber,
+//       chassisNumber,
+//       providerId: providerId,     // assign owner as provider
+//       status: 'accepted',         // auto-accept so payment can be made immediately
+//       paymentStatus: 'pending'
+//     });
+
+//     await booking.save();
+
+//     // mark availability slot as booked (best-effort)
+//     try {
+//       const startDateMidnight = new Date(startTime);
+//       startDateMidnight.setHours(0, 0, 0, 0);
+
+//       await ParkingSpace.findByIdAndUpdate(
+//         parkingSpaceId,
+//         {
+//           $set: { 'availability.$[dateElem].slots.$[slotElem].isBooked': true }
+//         },
+//         {
+//           arrayFilters: [
+//             { 'dateElem.date': { $eq: startDateMidnight } },
+//             { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }
+//           ],
+//           new: true
+//         }
+//       );
+//     } catch (err) {
+//       console.warn('Warning: failed to mark availability slot (nonfatal)', err);
+//     }
+
+//     // ---------- Notifications: send to booking user & provider ----------
+//     // helper: fetch tokens by user id
+//     const getTokensByUserId = async (id) => {
+//       if (!id) return [];
+//       const docs = await UserToken.find({ userId: id }).select('token -_id');
+//       return docs.map(d => d.token);
+//     };
+
+//     // Prepare app deep link / metadata (optional)
+//     const bookingDeepLink = `myapp://booking/${booking._id}`; // adjust scheme if needed
+//     const userTitle = 'Booking Confirmed';
+//     const userBody = `Your booking (${booking._id}) is confirmed for ${new Date(startTime).toLocaleString()}.`;
+
+//     const providerTitle = 'New Booking Received';
+//     const providerBody = `You have a new booking for your space (${parkingSpace.title || parkingSpaceId}) on ${new Date(startTime).toLocaleString()}.`;
+
+//     // Send to booking user
+//     (async () => {
+//       try {
+//         const userTokens = await getTokensByUserId(req.user._id);
+//         if (userTokens && userTokens.length > 0) {
+//           if (userTokens.length === 1) {
+//             await NotificationService.sendToDevice(userTokens[0], userTitle, userBody, { type: 'booking', bookingId: String(booking._id) });
+//           } else {
+//             const resp = await NotificationService.sendToMultiple(userTokens, userTitle, userBody, { type: 'booking', bookingId: String(booking._id) });
+//             // handle removal of invalid tokens
+//             await handleMulticastResponseCleanup(resp, userTokens);
+//           }
+//         } else {
+//           console.info('No user tokens found for booking user', req.user._id);
+//         }
+//       } catch (err) {
+//         console.warn('Failed to send notification to booking user:', err);
+//       }
+//     })();
+
+//     // Send to provider
+//     (async () => {
+//       try {
+//         const providerTokens = await getTokensByUserId(providerId);
+//         if (providerTokens && providerTokens.length > 0) {
+//           if (providerTokens.length === 1) {
+//             await NotificationService.sendToDevice(providerTokens[0], providerTitle, providerBody, { type: 'booking', bookingId: String(booking._id) });
+//           } else {
+//             const resp = await NotificationService.sendToMultiple(providerTokens, providerTitle, providerBody, { type: 'booking', bookingId: String(booking._id) });
+//             // cleanup invalid tokens
+//             await handleMulticastResponseCleanup(resp, providerTokens);
+//           }
+//         } else {
+//           console.info('No provider tokens found for provider', providerId);
+//         }
+//       } catch (err) {
+//         console.warn('Failed to send notification to provider:', err);
+//       }
+//     })();
+
+//     // optionally: send email to provider (best-effort)
+//     try {
+//       const provider = await ParkFinderSecondUser.findById(providerId);
+//       if (provider && provider.email) {
+//         sendNotification(provider.email, 'New Booking Accepted', `A booking for your space (${parkingSpaceId}) has been created and is awaiting payment.`);
+//       }
+//     } catch (err) {
+//       console.warn('Warning: notify provider email failed', err);
+//     }
+
+//     // return booking
+//     return res.status(201).json({ message: 'Booking created and auto-accepted; proceed to payment', booking });
+//   } catch (error) {
+//     console.error('createBooking error', error);
+//     return res.status(500).json({ message: 'Failed to create booking', error: error.message });
+//   }
+// };
+
+// ---------- helper to cleanup invalid tokens after sendMulticast ----------
+// async function handleMulticastResponseCleanup(resp, tokens) {
+//   // resp is expected to be the result of admin.messaging().sendMulticast()
+//   // which includes: { successCount, failureCount, responses: [ { success, error } ] }
+//   try {
+//     if (!resp || !Array.isArray(resp.responses)) return;
+//     for (let i = 0; i < resp.responses.length; i++) {
+//       const r = resp.responses[i];
+//       if (!r.success) {
+//         const err = r.error;
+//         // common invalid token error code: 'messaging/registration-token-not-registered'
+//         const token = tokens[i];
+//         const isNotRegistered = err && (err.code === 'messaging/registration-token-not-registered' || (typeof err.message === 'string' && err.message.toLowerCase().includes('not registered')));
+//         if (isNotRegistered) {
+//           try {
+//             await UserToken.deleteOne({ token });
+//             console.info('Removed invalid token from DB:', token);
+//           } catch (delErr) {
+//             console.warn('Failed to remove invalid token', token, delErr);
+//           }
+//         } else {
+//           console.warn('Notification send error for token:', token, err && err.code ? err.code : err);
+//         }
+//       }
+//     }
+//   } catch (e) {
+//     console.warn('handleMulticastResponseCleanup failed', e);
+//   }
+// }
+
+//Latest Notification
 export const createBooking = async (req, res) => {
   try {
+    console.log("req recieved in /createBooking");
     const { parkingSpaceId, startTime, endTime, vehicleNumber, vehicleType, vehicleModel, contactNumber, chassisNumber } = req.body;
 
     // find parking space
@@ -119,8 +411,8 @@ export const createBooking = async (req, res) => {
       vehicleModel,
       contactNumber,
       chassisNumber,
-      providerId: providerId,     // assign owner as provider
-      status: 'accepted',         // auto-accept so payment can be made immediately
+      providerId: providerId,
+      status: 'accepted',
       paymentStatus: 'pending'
     });
 
@@ -148,22 +440,77 @@ export const createBooking = async (req, res) => {
       console.warn('Warning: failed to mark availability slot (nonfatal)', err);
     }
 
-    // notify provider (best-effort)
+    // ---------- Notifications: send to booking user & provider (simplified) ----------
+    const getTokensByUserId = async (id) => {
+      if (!id) return [];
+      const docs = await UserToken.find({ userId: id }).select('token -_id');
+      return docs.map(d => d.token);
+    };
+
+    const bookingDeepLink = `myapp://booking/${booking._id}`;
+    const userTitle = 'Booking Confirmed';
+    const userBody = `Your booking (${booking._id}) is confirmed for ${new Date(startTime).toLocaleString()}.`;
+
+    const providerTitle = 'New Booking Received';
+    const providerBody = `You have a new booking for your space (${parkingSpace.title || parkingSpaceId}) on ${new Date(startTime).toLocaleString()}.`;
+
+    // Send to booking user
+    (async () => {
+      try {
+        const userTokens = await getTokensByUserId(req.user._id);
+        if (userTokens && userTokens.length > 0) {
+          if (userTokens.length === 1) {
+            await NotificationService.sendToDevice(userTokens[0], userTitle, userBody, { type: 'booking', bookingId: String(booking._id) });
+          } else {
+            // send to multiple devices, but don't inspect the multicast response
+            await NotificationService.sendToMultiple(userTokens, userTitle, userBody, { type: 'booking', bookingId: String(booking._id) });
+          }
+        } else {
+          console.info('No user tokens found for booking user', req.user._id);
+        }
+      } catch (err) {
+        console.warn('Failed to send notification to booking user:', err);
+      }
+    })();
+
+    // Send to provider
+    (async () => {
+      try {
+        const providerTokens = await getTokensByUserId(providerId);
+        if (providerTokens && providerTokens.length > 0) {
+          if (providerTokens.length === 1) {
+            await NotificationService.sendToDevice(providerTokens[0], providerTitle, providerBody, { type: 'booking', bookingId: String(booking._id) });
+          } else {
+            // send to multiple devices, but don't inspect the multicast response
+            await NotificationService.sendToMultiple(providerTokens, providerTitle, providerBody, { type: 'booking', bookingId: String(booking._id) });
+          }
+        } else {
+          console.info('No provider tokens found for provider', providerId);
+        }
+      } catch (err) {
+        console.warn('Failed to send notification to provider:', err);
+      }
+    })();
+
+    // optionally: send email to provider (best-effort)
     try {
       const provider = await ParkFinderSecondUser.findById(providerId);
       if (provider && provider.email) {
         sendNotification(provider.email, 'New Booking Accepted', `A booking for your space (${parkingSpaceId}) has been created and is awaiting payment.`);
       }
     } catch (err) {
-      console.warn('Warning: notify provider failed', err);
+      console.warn('Warning: notify provider email failed', err);
     }
 
+    // return booking
     return res.status(201).json({ message: 'Booking created and auto-accepted; proceed to payment', booking });
   } catch (error) {
     console.error('createBooking error', error);
     return res.status(500).json({ message: 'Failed to create booking', error: error.message });
   }
 };
+
+
 
 /**
  * Get bookings for current user
