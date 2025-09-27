@@ -20,7 +20,7 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const address: any = space.address || {};
   const street = address.street || 'No street information';
   const city = address.city || 'No city information';
-  const price = space.pricePerHour ?? space.price ?? 0;
+  const price = space.priceParking ?? space.price ?? 0;
   const rating = space.rating ?? 0;
   const amenities = space.amenities || [];
   

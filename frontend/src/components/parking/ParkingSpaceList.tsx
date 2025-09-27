@@ -82,7 +82,7 @@ export default function ParkingSpaceList({
     }
 
     // Check price range
-    const price = space.pricePerHour ?? space.price ?? 0;
+    const price = space.priceParking ?? space.price ?? 0;
     if (price < filters.priceRange[0] || price > filters.priceRange[1]) {
       return false;
     }
@@ -112,9 +112,9 @@ export default function ParkingSpaceList({
       {filteredSpaces.map((space: any) => {
         const address: any = space.address || {};
         const amenities = Array.isArray(space.amenities) ? space.amenities : [];
-        const price = space.pricePerHour ?? space.price ?? 0;
+        const price = space.priceParking ?? space.price ?? 0;
         const rating = typeof space.rating === 'number' ? space.rating : 0;
-        const availableSpots = space.availableSpots || 1;
+        const availableSpots = space.availableSpots;
 
         return (
           <div

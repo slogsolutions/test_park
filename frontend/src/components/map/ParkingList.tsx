@@ -68,9 +68,9 @@ export default function ParkingSpaceList({ spaces, onSpaceSelect }: ParkingListP
         const street = address.street || 'Address not specified';
         const city = address.city || 'Location not specified';
         const amenities = Array.isArray(space.amenities) ? space.amenities : [];
-        const price = space.pricePerHour ?? space.price ?? 0;
+        const price = space.priceParking ?? space.price ?? 0;
         const rating = typeof space.rating === 'number' ? space.rating : 0;
-        const availableSpaces = space.availableSpaces || 1;
+        const availableSpaces = space.availableSpots || 1;
 
         const key = typeof space._id === 'object' && (space._id as any).toString 
           ? (space._id as any).toString() 

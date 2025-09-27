@@ -26,7 +26,7 @@ export default function ParkingMarker({
   onMouseLeave,
   space,
 }: ParkingMarkerProps) {
-  const price = space?.pricePerHour ?? space?.price ?? 0;
+  const price = space?.priceParking ?? space?.price ?? 0;
 
   return (
     <Marker 

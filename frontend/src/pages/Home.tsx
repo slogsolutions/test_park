@@ -107,7 +107,7 @@ export default function Home() {
 
       // Price filter - only apply if user explicitly activated it
       if (filters.isPriceFilterActive) {
-        const price = space.pricePerHour ?? space.price ?? 0;
+        const price = space.priceParking ?? space.price ?? 0;
         const [minPrice, maxPrice] = filters.priceRange;
         if (price < minPrice || price > maxPrice) {
           return false;
