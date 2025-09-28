@@ -34,12 +34,14 @@ const ProviderBookings = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'active' | 'rejected' | 'confirmed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'active' | 'rejected' | 'confirmed' | 'completed'>('all');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [otpInput, setOtpInput] = useState<string>('');
   const [verifyingOtp, setVerifyingOtp] = useState<string | null>(null);
+  const [secondOtpInput, setSecondOtpInput] = useState('');
+  const [verifyingSecondOtp, setVerifyingSecondOtp] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBookings = async () => {
@@ -158,7 +160,7 @@ const ProviderBookings = () => {
     return `${hrs} hr${hrs > 1 ? 's' : ''}${remMins > 0 ? ` ${remMins} min` : ''} to start`;
   };
 
-  // Verify OTP function — seller uses this to confirm/complete bookings
+  // Verify OTP function — seller uses this to confirm/confirm/start bookings (used when status is 'accepted')
   const verifyOtpForBooking = async (bookingId: string) => {
     if (!otpInput.trim()) {
       alert('Please enter OTP');
@@ -184,23 +186,14 @@ const ProviderBookings = () => {
         return;
       }
 
-      // If verification succeeded, set booking status appropriately.
-      // If booking was active -> mark completed (seller completed the session).
-      // If not active (earlier flow) -> set to confirmed.
+      // Use backend-returned booking status if provided; otherwise fallbacks:
       setBookings(prev => prev.map(b => {
         if ((b._id === bookingId || b.id === bookingId)) {
-          // prefer backend-supplied booking status if present
           const backendStatus = data.booking?.status;
           if (backendStatus) {
-            return { ...(b as any), status: backendStatus };
+            return { ...(b as any), status: backendStatus, otpVerified: true };
           }
-
-          // fallback: if previous status was active, mark completed
-          if ((b as any).status === 'active') {
-            return { ...(b as any), status: 'completed', otpVerified: true };
-          }
-
-          // otherwise mark confirmed (existing flow)
+          // fallback: if it was accepted, now mark confirmed/active depending on backend assumptions
           return { ...(b as any), status: 'confirmed', otpVerified: true };
         }
         return b;
@@ -213,6 +206,52 @@ const ProviderBookings = () => {
       console.error('verify OTP error', err);
       alert('Error verifying OTP');
       setVerifyingOtp(null);
+    }
+  };
+
+  // SECOND OTP: seller uses this to complete a currently active session
+  const verifySecondOtpForBooking = async (bookingId: string) => {
+    if (!secondOtpInput.trim() || secondOtpInput.length !== 6) {
+      alert("Please enter a valid 6-digit second OTP");
+      return;
+    }
+
+    setVerifyingSecondOtp(bookingId);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-second-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ otp: secondOtpInput }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Error: ${data.message || "Failed to verify second OTP"}`);
+        setVerifyingSecondOtp(null);
+        return;
+      }
+
+      // Update booking in-place with whatever backend returned (or at least mark completed)
+      const returned = data.booking || data;
+      setBookings(prev => prev.map((b: any) => {
+        const stable = b._id || b.id;
+        if (stable === bookingId) {
+          return { ...b, ...(returned || {}), status: 'completed' };
+        }
+        return b;
+      }));
+
+      alert("Parking session completed!");
+      setSecondOtpInput("");
+      setVerifyingSecondOtp(null);
+    } catch (err) {
+      console.error("verifySecondOtpForBooking error:", err);
+      alert("Failed to verify second OTP");
+      setVerifyingSecondOtp(null);
     }
   };
 
@@ -491,40 +530,49 @@ const ProviderBookings = () => {
                   </div>
                 )}
 
-                {/* NEW: OTP entry for seller to COMPLETE an already ACTIVE booking */}
+                {/* SECOND OTP: only show for ACTIVE bookings (seller completes session) */}
                 {booking.status === 'active' && (
-                  <div className="mt-4 p-4 rounded-lg border bg-gray-50">
+                  <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
                     <div className="flex items-center mb-3">
-                      <Key className="h-5 w-5 text-yellow-700 mr-2" />
-                      <h4 className="text-sm font-semibold text-yellow-800">Complete Session (enter user's OTP)</h4>
+                      <Key className="h-5 w-5 text-green-600 mr-2" />
+                      <h4 className="text-sm font-semibold text-green-800">End Session - Second OTP</h4>
                     </div>
-
+                    <p className="text-sm text-green-600 mb-3">
+                      When the customer is leaving, ask them for their second OTP to complete and close the booking.
+                    </p>
                     <div className="flex space-x-3">
                       <input
                         type="text"
-                        placeholder="Enter 6-digit OTP from user"
-                        value={verifyingOtp === stableId ? otpInput : ''}
+                        placeholder="Enter 6-digit second OTP"
+                        value={verifyingSecondOtp === stableId ? secondOtpInput : ''}
                         onChange={(e) => {
-                          if (verifyingOtp === stableId) {
-                            setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                          if (verifyingSecondOtp === stableId) {
+                            setSecondOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
                           } else {
-                            setVerifyingOtp(stableId);
-                            setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            setVerifyingSecondOtp(stableId);
+                            setSecondOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
                           }
                         }}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        className="flex-1 px-3 py-2 border border-green-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
                         maxLength={6}
                       />
                       <button
-                        onClick={() => verifyOtpForBooking(stableId)}
-                        disabled={verifyingOtp === stableId && (!otpInput || otpInput.length !== 6)}
-                        className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-400 text-white px-4 py-2 rounded transition-colors duration-200 flex items-center"
+                        onClick={() => verifySecondOtpForBooking(stableId)}
+                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded transition-colors duration-200 flex items-center"
                       >
-                        {verifyingOtp === stableId && otpInput.length !== 6 ? "Verifying..." : "Verify & Complete"}
+                        {verifyingSecondOtp === stableId ? (
+                          "Completing..."
+                        ) : (
+                          <>
+                            <Key className="h-4 w-4 mr-2" />
+                            Complete Session
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
                 )}
+
               </motion.div>
             );
           })}
