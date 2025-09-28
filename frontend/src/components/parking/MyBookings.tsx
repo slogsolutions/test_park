@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { FaMapMarkerAlt, FaRegCalendarAlt, FaCheckCircle, FaMoneyBillWave, FaTimesCircle, FaCreditCard } from "react-icons/fa";
+import { FaMapMarkerAlt, FaRegCalendarAlt, FaCheckCircle, FaMoneyBillWave, FaTimesCircle, FaCreditCard, FaClipboard } from "react-icons/fa";
 import LoadingScreen from "../../pages/LoadingScreen";
 
 type Booking = {
@@ -22,6 +22,9 @@ const MyBookings: React.FC = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
 
+  // store generated OTPs for bookings (so buyer can see/copy)
+  const [generatedOtps, setGeneratedOtps] = useState<Record<string, { otp: string; expiresAt?: string }>>({});
+
   useEffect(() => {
     const fetchBookings = async () => {
       try {
@@ -30,7 +33,7 @@ const MyBookings: React.FC = () => {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
         });
-        setBookings(response.data);
+        setBookings(response.data || []);
       } catch (err) {
         setError("Failed to fetch bookings");
         console.error("fetchBookings error:", err);
@@ -50,9 +53,7 @@ const MyBookings: React.FC = () => {
         },
       });
 
-      setBookings((prevBookings) =>
-        prevBookings.filter((booking) => booking._id !== bookingId)
-      );
+      setBookings((prevBookings) => prevBookings.filter((booking) => booking._id !== bookingId));
       alert("Booking cancelled successfully");
     } catch (err) {
       console.error("cancel booking error:", err);
@@ -62,6 +63,7 @@ const MyBookings: React.FC = () => {
 
   const loadRazorpayScript = async () => {
     return new Promise((resolve, reject) => {
+      if ((window as any).Razorpay) return resolve(true);
       const script = document.createElement("script");
       script.src = "https://checkout.razorpay.com/v1/checkout.js";
       script.onload = () => resolve(true);
@@ -70,7 +72,7 @@ const MyBookings: React.FC = () => {
     });
   };
 
-  // Request OTP from server
+  // Request OTP from server (buyer will receive and show this OTP, which they give to seller)
   const requestOTPFromServer = async (bookingId: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -84,43 +86,28 @@ const MyBookings: React.FC = () => {
           },
         }
       );
-      return response.data;
+      return response.data; // expect { otp, expiresAt }
     } catch (err: any) {
       console.error('Failed to request OTP', err);
       throw err;
     }
   };
 
-  // Helper: compute discount meta for a parkingSpace
+  // Helper: compute discount meta for a parkingSpace (keeps original logic)
   const computePriceMeta = (space: any) => {
-    // base price priority: priceParking, priceParking, price (some of your models use different keys)
-    const baseRaw = space?.priceParking ?? space?.priceParking ?? space?.price ?? 0;
+    const baseRaw = space?.priceParking ?? space?.price ?? 0;
     const base = Number(baseRaw) || 0;
-
-    // try common discount keys
     let rawDiscount = space?.discount ?? space?.discountPercent ?? space?.discount_percentage ?? 0;
-
-    // if string like "10%" -> strip
-    if (typeof rawDiscount === 'string') {
-      rawDiscount = rawDiscount.replace?.('%', '') ?? rawDiscount;
-    }
-
-    // if object { percent: 10 } or similar
+    if (typeof rawDiscount === 'string') rawDiscount = rawDiscount.replace?.('%', '') ?? rawDiscount;
     if (typeof rawDiscount === 'object' && rawDiscount !== null) {
       rawDiscount = rawDiscount.percent ?? rawDiscount.value ?? rawDiscount.amount ?? 0;
     }
-
     const discountNum = Number(rawDiscount);
     const discountPercent = Number.isFinite(discountNum) ? Math.max(0, Math.min(100, discountNum)) : 0;
-
-    return {
-      basePrice: +base.toFixed(2),
-      discountPercent,
-      hasDiscount: discountPercent > 0,
-    };
+    return { basePrice: +base.toFixed(2), discountPercent, hasDiscount: discountPercent > 0 };
   };
 
-  // Calculate duration in hours (decimal)
+  // Calculate duration in hours
   const getHoursDuration = (startISO: string, endISO: string) => {
     try {
       const start = new Date(startISO).getTime();
@@ -134,18 +121,14 @@ const MyBookings: React.FC = () => {
     }
   };
 
-  // compute totals for a booking using parkingSpace discount
   const computeTotalsForBooking = (booking: Booking) => {
     const space = booking.parkingSpace ?? {};
     const meta = computePriceMeta(space);
-    // prefer booking.priceParking if provided (e.g., stored at booking creation)
     const perHour = Number(booking.priceParking ?? meta.basePrice ?? 0) || 0;
     const hours = getHoursDuration(booking.startTime, booking.endTime) || 0;
-    // if hours is 0 (malformed), fallback to 1 hour to avoid 0 totals
     const effectiveHours = hours > 0 ? hours : 1;
-
     const originalTotal = +(perHour * effectiveHours);
-    const discountedTotal = +(originalTotal * (1 - meta.discountPercent / 100));
+    const discountedTotal = +(originalTotal * (1 - (meta.discountPercent / 100)));
     return {
       perHour,
       hours: effectiveHours,
@@ -156,6 +139,7 @@ const MyBookings: React.FC = () => {
     };
   };
 
+  // Generic pay flow used for initial booking payment
   const handlePayNow = async (bookingId: string, amount: number) => {
     try {
       await loadRazorpayScript();
@@ -193,16 +177,11 @@ const MyBookings: React.FC = () => {
             );
 
             alert("Payment successful!");
-            // Refresh the bookings so UI is in-sync with backend
             setBookings((prevBookings) =>
-              prevBookings.map((booking) =>
-                booking._id === bookingId
-                  ? { ...booking, paymentStatus: "paid" }
-                  : booking
-              )
+              prevBookings.map((b) => (b._id === bookingId ? { ...b, paymentStatus: "paid" } : b))
             );
           } catch (e) {
-            console.log(e);
+            console.error(e);
             alert("Payment verification failed");
           }
         },
@@ -224,21 +203,98 @@ const MyBookings: React.FC = () => {
     }
   };
 
+  // === EXTEND FLOW (uses existing payment endpoint, then refetch booking) ===
+  const handleExtendAndPay = async (booking: Booking) => {
+    try {
+      // charge for one hour at per-hour rate
+      const totals = computeTotalsForBooking(booking);
+      const amount = Math.ceil(totals.perHour * 100) / 100; // round up to two decimals if needed
+      await loadRazorpayScript();
+
+      // Reuse your existing payment initiation endpoint. Pass extend: true so backend can treat this as extension (if backend supports)
+      const { data: paymentData } = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/payment/initiate-payment`,
+        { bookingId: booking._id, amount, extend: true },
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+      );
+
+      const options = {
+        key: "rzp_test_eQoJ7XZxUf37D7",
+        amount: paymentData.amount,
+        currency: "INR",
+        order_id: paymentData.orderId,
+        handler: async (response: any) => {
+          try {
+            // verify payment (server should detect extend flag from initial order creation)
+            await axios.post(
+              `${import.meta.env.VITE_BASE_URL}/api/payment/verify-payment`,
+              {
+                bookingId: booking._id,
+                razorpay_order_id: paymentData.orderId,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              },
+              { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+            );
+
+            // After successful verification, refetch booking from server (server should update endTime on verified extension)
+            const refreshed = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/booking/${booking._id}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+            });
+
+            const updatedBooking = refreshed.data;
+            setBookings((prev) => prev.map((b) => (b._id === booking._id ? updatedBooking : b)));
+            alert("Extension paid and applied — Complete button re-enabled.");
+          } catch (e) {
+            console.error("Extension payment verification failed", e);
+            alert("Extension payment verification failed");
+          }
+        },
+        prefill: {
+          name: "Parking Space",
+          email: "customer@example.com",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#FFC107",
+        },
+      };
+
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.error("handleExtendAndPay error:", err);
+      alert("Failed to create extension payment. Please try again.");
+    }
+  };
+
+  // Generate OTP for completion (buyer action) and show it inline
+  const handleGenerateOtpForCompletion = async (booking: Booking) => {
+    try {
+      const res = await requestOTPFromServer(booking._id);
+      // expect { otp, expiresAt }
+      setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: res.otp, expiresAt: res.expiresAt } }));
+      alert(`OTP generated: ${res.otp}\nGive this OTP to the seller to complete the booking.\nExpires at: ${res.expiresAt ?? "soon"}`);
+    } catch (err) {
+      console.error("Failed to generate OTP", err);
+      alert("Failed to generate OTP. Try again.");
+    }
+  };
+
   const handleTrackNow = async (booking: Booking) => {
     try {
       const res = await requestOTPFromServer(booking._id);
-      // Navigate and pass OTP to track page (buyer will see OTP)
-      navigate("/track", { 
-        state: { 
-          parkingSpace: booking.parkingSpace, 
-          otp: res.otp, 
+      navigate("/track", {
+        state: {
+          parkingSpace: booking.parkingSpace,
+          otp: res.otp,
           bookingId: booking._id,
-          expiresAt: res.expiresAt
-        } 
+          expiresAt: res.expiresAt,
+        },
       });
     } catch (e) {
       console.error("handleTrackNow error:", e);
-      alert('Failed to generate OTP. Try again.');
+      alert("Failed to generate OTP. Try again.");
     }
   };
 
@@ -257,7 +313,7 @@ const MyBookings: React.FC = () => {
   if (loading) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
-       <LoadingScreen/>
+        <LoadingScreen />
       </div>
     );
   }
@@ -266,7 +322,7 @@ const MyBookings: React.FC = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto  mb-40 p-6 bg-gradient-to-r  shadow-xl rounded-xl">
+    <div className="max-w-4xl mx-auto mb-40 p-6 bg-gradient-to-r shadow-xl rounded-xl">
       <h2 className="text-3xl font-semibold text-gray-800 mb-6 text-center">Your Bookings</h2>
       {bookings.length === 0 ? (
         <p className="text-center text-gray-500">You don't have any bookings.</p>
@@ -274,15 +330,17 @@ const MyBookings: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
           {bookings.map((booking) => {
             const st = statusLabel(booking.status);
-            // Decide whether Pay button should appear:
-            // show Pay if payment is pending and booking is in a payable state (pending|accepted|confirmed)
+            const now = Date.now();
+            const endTs = new Date(booking.endTime).getTime();
+            const isActive = booking.status === "active";
+            const beforeEnd = now < endTs;
+            const afterOrAtEnd = now >= endTs;
+            const totals = computeTotalsForBooking(booking);
+            const perHour = totals.perHour;
+            const extensionAmount = Math.ceil(perHour);
+            const generated = generatedOtps[booking._id];
             const payableStatuses = ['pending', 'accepted', 'confirmed'];
             const showPayNow = booking.paymentStatus === "pending" && payableStatuses.includes(booking.status);
-
-            // compute totals using discount if available
-            const totals = computeTotalsForBooking(booking);
-            // amount to send to payment API: use ceil of discountedTotal (existing code used Math.ceil)
-            const paymentAmountToUse = totals.discountedTotal;
 
             return (
               <div
@@ -314,7 +372,6 @@ const MyBookings: React.FC = () => {
                     <span className={`${st.color} font-semibold ml-2`}>{st.label}</span>
                   </li>
 
-                  {/* Price display: show original (strike) and discounted if applicable */}
                   <li className="flex items-center">
                     <FaMoneyBillWave className="mr-2 text-green-600" />
                     <span>Total Price: </span>
@@ -331,7 +388,8 @@ const MyBookings: React.FC = () => {
                     </div>
                   </li>
                 </ul>
-                <div className="mt-4 flex  space-x-4">
+
+                <div className="mt-4 flex flex-col gap-3">
                   {booking.status === "pending" && (
                     <button
                       onClick={() => handleCancelBooking(booking._id)}
@@ -341,26 +399,95 @@ const MyBookings: React.FC = () => {
                       <span className="ml-2">Cancel</span>
                     </button>
                   )}
+
                   {showPayNow && (
                     <button
-                      onClick={() => handlePayNow(booking._id, paymentAmountToUse)}
+                      onClick={() => handlePayNow(booking._id, totals.discountedTotal)}
                       className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105"
                     >
                       <FaCreditCard className="text-xl" />
                       <span className="ml-2">Pay Now</span>
                     </button>
                   )}
+
+                  {isActive && (
+                    <>
+                      {beforeEnd && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleGenerateOtpForCompletion(booking)}
+                            className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex-1 hover:bg-green-700 transition"
+                          >
+                            Complete
+                          </button>
+                          <button
+                            onClick={() => handleTrackNow(booking)}
+                            className="bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-700 transition"
+                          >
+                            Track
+                          </button>
+                        </div>
+                      )}
+
+                      {afterOrAtEnd && (
+                        <div className="flex gap-2">
+                          <button
+                            disabled
+                            className="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg flex-1 cursor-not-allowed"
+                            title="Complete is disabled after end time; extend and pay to continue session"
+                          >
+                            Complete (expired)
+                          </button>
+
+                          <button
+                            onClick={() => handleExtendAndPay(booking)}
+                            className="bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-700 transition"
+                          >
+                            Extend & Pay 1 hr — ₹{extensionAmount}
+                          </button>
+                        </div>
+                      )}
+
+                      {generated && (
+                        <div className="mt-2 p-3 bg-gray-50 rounded border">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xs text-gray-500">Completion OTP (give to seller)</div>
+                              <div className="font-mono text-lg font-semibold">{generated.otp}</div>
+                              {generated.expiresAt && (
+                                <div className="text-xs text-gray-500">Expires: {new Date(generated.expiresAt).toLocaleString()}</div>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(generated.otp);
+                                  alert("OTP copied to clipboard");
+                                }}
+                                className="px-3 py-1 bg-blue-600 text-white rounded"
+                                title="Copy OTP"
+                              >
+                                <FaClipboard />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Show Track Now for paid bookings that are not active and not completed (avoids duplication and hides track when completed) */}
+                  {booking.paymentStatus === "paid" && booking.status !== "completed" && !isActive && (
+                    <div>
+                      <button
+                        onClick={() => handleTrackNow(booking)}
+                        className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105"
+                      >
+                        Track Now
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {booking.paymentStatus === "paid" && (
-                  <div className="mt-4 ">
-                    <button
-                      onClick={() => handleTrackNow(booking)}
-                      className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105"
-                    >
-                      Track Now
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })}

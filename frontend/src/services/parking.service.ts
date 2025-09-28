@@ -1,23 +1,45 @@
+// src/services/parking.service.ts
 import api from '../utils/api';
 import { ParkingSpace } from '../types/parking';
 
 export const parkingService = {
-  // Get nearby parking spaces based on location and radius
-  async getNearbySpaces(lat: number, lng: number, radius: number) {
-    const response = await api.get<ParkingSpace[]>(
-      `/parking?lat=${lat}&lng=${lng}&radius=${radius}`
-    );
+  /**
+   * Get nearby parking spaces based on location.
+   * radius is optional. If provided it will be included in the query.
+   */
+  async getNearbySpaces(lat: number, lng: number, radius?: number) {
+    const params = new URLSearchParams({
+      lat: lat.toString(),
+      lng: lng.toString(),
+    });
+
+    if (typeof radius === 'number') {
+      params.set('radius', radius.toString());
+    }
+
+    const url = `/parking?${params.toString()}`;
+    const response = await api.get<ParkingSpace[]>(url);
+    return response.data;
+  },
+
+  /**
+   * Try to fetch *all* parking spaces.
+   * This endpoint may not exist on all backends; it's a convenience.
+   * If your backend doesn't expose /parking/all, this will likely return 404
+   * and callers should fall back to getNearbySpaces.
+   */
+  async getAllSpaces() {
+    const response = await api.get<ParkingSpace[]>('/parking/all');
     return response.data;
   },
 
   // Register a parking space (FormData, with photos)
   async registerSpaceFormData(data: FormData) {
     const token = localStorage.getItem('token');
-    // Use relative path /parking (api instance likely has baseURL configured)
     const response = await api.post('/parking', data, {
       headers: {
         Authorization: `Bearer ${token}`,
-        // DO NOT set 'Content-Type' manually for FormData; browser sets boundary
+        // Let browser set Content-Type for FormData
       },
     });
     console.log('registerSpaceFormData response:', response.data);
@@ -37,8 +59,7 @@ export const parkingService = {
     return response.data;
   },
 
-  // New convenience wrapper - choose method automatically or use directly from UI:
-  // If caller passes FormData -> call FormData handler; otherwise JSON handler.
+  // Convenience wrapper: decides FormData vs JSON
   async registerSpace(data: FormData | Record<string, any>) {
     if (data instanceof FormData) {
       return this.registerSpaceFormData(data);
@@ -49,7 +70,6 @@ export const parkingService = {
 
   // Get user's own parking spaces
   async getMySpaces() {
-    // Use relative path to remain consistent with other methods
     const response = await api.get('/parking/my-spaces');
     return response.data;
   },
@@ -60,7 +80,7 @@ export const parkingService = {
     return response.data;
   },
 
-  // Get filtered parking spaces based on location, radius, and amenities
+  // Get filtered parking spaces based on optional radius and amenities
   async getFilteredSpaces({
     lat,
     lng,
@@ -69,29 +89,27 @@ export const parkingService = {
   }: {
     lat: number;
     lng: number;
-    radius: number;
-    amenities: string[];
+    radius?: number;
+    amenities?: string[];
   }) {
-    const queryParams = new URLSearchParams({
+    const params = new URLSearchParams({
       lat: lat.toString(),
       lng: lng.toString(),
-      radius: radius.toString(),
-      amenities: amenities.join(','),
     });
 
-    const response = await api.get<ParkingSpace[]>(
-      `/parking/filter?${queryParams.toString()}`
-    );
+    if (typeof radius === 'number') params.set('radius', radius.toString());
+    if (amenities && amenities.length > 0) params.set('amenities', amenities.join(','));
+
+    const response = await api.get<ParkingSpace[]>(`/parking/filter?${params.toString()}`);
     return response.data;
   },
 
   // Toggle per-space online status
   async toggleOnline(spaceId: string, isOnline: boolean) {
-  console.log('API call toggleOnline ->', spaceId, isOnline);
-  const response = await api.patch(`/parking/${spaceId}/online`, { isOnline });
-  return response.data;
-},
-
+    console.log('API call toggleOnline ->', spaceId, isOnline);
+    const response = await api.patch(`/parking/${spaceId}/online`, { isOnline });
+    return response.data;
+  },
 
   // Soft-delete a parking space
   async deleteSpace(spaceId: string) {
