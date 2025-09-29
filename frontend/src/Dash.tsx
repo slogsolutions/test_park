@@ -10,7 +10,7 @@ import Requests from './pages/Requests';
 import LoadingScreen from './pages/LoadingScreen';
 import { Provider, Booking } from './types';
 import { ProviderDashboard } from './components/dashboard/Deatils';
-import { Profile } from './components/dashboard/Profile';
+
 
 import RegisterParking from './pages/RegisterParking';
 import ProviderLocations from './components/dashboard/ProviderSpaces';
@@ -123,10 +123,6 @@ function Dash() {
               <Requests />
             </div>
           )}
-
-                    {currentPage === 'ProviderDash' && <ProviderDashboard />}
-          {currentPage === 'BookedSlots' && <BookedSlots bookings={bookings} />}
-          {currentPage === 'Profile' && <Profile />}
         </main>
 
         {/* BottomNav usually only for mobile; it can overlap on top of main content.
