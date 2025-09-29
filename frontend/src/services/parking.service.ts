@@ -6,8 +6,16 @@ export const parkingService = {
   /**
    * Get nearby parking spaces based on location.
    * radius is optional. If provided it will be included in the query.
+   *
+   * NOTE: If lat or lng is missing (null/undefined), this will fallback to getAllSpaces()
+   * so callers that don't supply a location will receive the full list.
    */
-  async getNearbySpaces(lat: number, lng: number, radius?: number) {
+  async getNearbySpaces(lat?: number | null, lng?: number | null, radius?: number) {
+    // If lat/lng are not provided, return all locations
+    if (lat == null || lng == null) {
+      return this.getAllSpaces();
+    }
+
     const params = new URLSearchParams({
       lat: lat.toString(),
       lng: lng.toString(),
@@ -17,19 +25,19 @@ export const parkingService = {
       params.set('radius', radius.toString());
     }
 
+    // Backend endpoint for nearby/searchable parking
     const url = `/parking?${params.toString()}`;
     const response = await api.get<ParkingSpace[]>(url);
     return response.data;
   },
 
   /**
-   * Try to fetch *all* parking spaces.
-   * This endpoint may not exist on all backends; it's a convenience.
-   * If your backend doesn't expose /parking/all, this will likely return 404
-   * and callers should fall back to getNearbySpaces.
+   * Get ALL parking spaces (no location filter).
+   * We call the same `/parking` endpoint but without lat/lng query params.
+   * Backend should return all non-deleted spaces when lat/lng are not included.
    */
   async getAllSpaces() {
-    const response = await api.get<ParkingSpace[]>('/parking/all');
+    const response = await api.get<ParkingSpace[]>('/parking');
     return response.data;
   },
 
@@ -42,7 +50,6 @@ export const parkingService = {
         // Let browser set Content-Type for FormData
       },
     });
-    console.log('registerSpaceFormData response:', response.data);
     return response.data;
   },
 
@@ -55,7 +62,6 @@ export const parkingService = {
         Authorization: `Bearer ${token}`,
       },
     });
-    console.log('registerSpaceJSON response:', response.data);
     return response.data;
   },
 
@@ -106,7 +112,6 @@ export const parkingService = {
 
   // Toggle per-space online status
   async toggleOnline(spaceId: string, isOnline: boolean) {
-    console.log('API call toggleOnline ->', spaceId, isOnline);
     const response = await api.patch(`/parking/${spaceId}/online`, { isOnline });
     return response.data;
   },

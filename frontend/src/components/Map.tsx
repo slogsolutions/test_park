@@ -49,14 +49,24 @@ const MapComponent: React.FC<MapComponentProps> = ({ onParkingSpacesUpdate }) =>
   }, []);
 
   useEffect(() => {
-    const fetchNearbyParkingSpaces = async () => {
-      if (!userLocation) return;
-      
+    /**
+     * Modified fetch logic:
+     * - By default, fetch ALL parking spaces from /api/parking-spaces so markers for
+     *   every stored location are visible across the whole map.
+     * - If you later add a "Near Me" button or filters, call the /nearby endpoint
+     *   when that option is explicitly selected.
+     *
+     * This change ensures you see every parking location when no filters are applied.
+     */
+    const fetchParkingSpaces = async () => {
       try {
-        const response = await fetch(
-          `http://localhost:3000/api/parking-spaces/nearby?lng=${userLocation[0]}&lat=${userLocation[1]}`
-        );
+        // default: fetch all parking spaces (no location restriction)
+        const url = `http://localhost:3000/api/parking-spaces`;
+        const response = await fetch(url);
         const data = await response.json();
+
+        // If your backend returns GeoJSON-like objects with coordinates in `location.coordinates`,
+        // this should be fine. If your backend returns a different shape, adapt accordingly.
         setParkingSpaces(data);
         onParkingSpacesUpdate(data);
       } catch (error) {
@@ -64,8 +74,10 @@ const MapComponent: React.FC<MapComponentProps> = ({ onParkingSpacesUpdate }) =>
       }
     };
 
-    fetchNearbyParkingSpaces();
-  }, [userLocation, onParkingSpacesUpdate]);
+    fetchParkingSpaces();
+    // note: userLocation remains in deps if you later want fetching to react to it,
+    // but current fetching is independent of userLocation.
+  }, [onParkingSpacesUpdate, userLocation]);
 
   return (
     <Map

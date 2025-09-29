@@ -138,9 +138,7 @@ export const registerParkingSpace = async (req, res) => {
       availability: availabilityParsed,
       amenities: amenitiesParsed,
       photos,
-      discount: discountNum, // NEW: save discount percentage
-      // New keys default are handled in the Mongoose model (isOnline/isDeleted/deletedAt)
-      // But if you want to explicitly set isOnline default here, you can add isOnline: false
+      discount: discountNum,
     });
 
     console.log('registered parking space details', parkingSpace);
@@ -158,30 +156,27 @@ export const registerParkingSpace = async (req, res) => {
 };
 
 export const getParkingSpaceAvailability = async (req, res) => {
-  const { spaceId } = req.params; // Get spaceId from URL parameters
+  const { spaceId } = req.params;
 
   if (!req.user) {
     return res.status(401).json({ message: 'User not authenticated' });
   }
 
   try {
-    // Find parking space by spaceId and ensure not deleted
     const parkingSpace = await ParkingSpace.findById(spaceId);
 
     if (!parkingSpace || parkingSpace.isDeleted) {
       return res.status(404).json({ message: 'Parking space not found' });
     }
 
-    // Assuming availability is stored as an array of time slots
     const availability = (parkingSpace.availability || []).map(avail => {
       return (avail.slots || []).map(slot => ({
-        startTime: slot.startTime ? slot.startTime.toISOString() : null, // Convert to ISO string if exists
-        endTime: slot.endTime ? slot.endTime.toISOString() : null,     // Convert to ISO string if exists
+        startTime: slot.startTime ? slot.startTime.toISOString() : null,
+        endTime: slot.endTime ? slot.endTime.toISOString() : null,
         isBooked: !!slot.isBooked,
       }));
-    }).flat(); // Flatten the array of slots to make it easier to work with on the frontend
+    }).flat();
 
-    // Return availability data
     res.status(200).json({ availability });
   } catch (error) {
     console.error('Error fetching parking space availability:', error.message);
@@ -214,14 +209,8 @@ export const updateParkingSpace = async (req, res) => {
   }
 };
 
-// New controller: set per-space online status (expects { isOnline: boolean } in body)
 export const setOnlineStatus = async (req, res) => {
   try {
-    console.log('>>> setOnlineStatus request - params.id:', req.params.id);
-    console.log('>>> setOnlineStatus request - body:', req.body);
-    console.log('>>> setOnlineStatus request - auth user id:', req.user ? req.user._id : null);
-
-    // Ensure user is present (protect middleware should have set req.user)
     if (!req.user) {
       return res.status(401).json({ message: 'Not authorized, user missing' });
     }
@@ -231,20 +220,17 @@ export const setOnlineStatus = async (req, res) => {
       return res.status(400).json({ message: 'isOnline must be boolean' });
     }
 
-    // Validate id format before DB query
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ message: 'Invalid parking space id' });
     }
 
     const parkingSpace = await ParkingSpace.findById(id);
-    console.log('>>> ParkingSpace.findById result:', parkingSpace ? { id: parkingSpace._id.toString(), owner: parkingSpace.owner?.toString(), isDeleted: parkingSpace.isDeleted } : null);
 
     if (!parkingSpace || parkingSpace.isDeleted) {
       return res.status(404).json({ message: 'Parking space not found', id });
     }
 
-    // Ensure owner exists and compare safely
     const ownerId = parkingSpace.owner ? parkingSpace.owner.toString() : null;
     if (!ownerId || ownerId !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized' });
@@ -253,7 +239,6 @@ export const setOnlineStatus = async (req, res) => {
     parkingSpace.isOnline = isOnline;
     await parkingSpace.save();
 
-    // Return the updated parking space (or a smaller response if you prefer)
     return res.json({ message: 'Status updated', parkingSpace });
   } catch (error) {
     console.error('Error setting online status', error);
@@ -272,7 +257,6 @@ export const deleteParkingSpace = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    // Soft delete instead of hard delete
     parkingSpace.isDeleted = true;
     parkingSpace.deletedAt = new Date();
     await parkingSpace.save();
@@ -284,11 +268,12 @@ export const deleteParkingSpace = async (req, res) => {
   }
 };
 
+// ✅ Modified: returns ALL parking spaces if no lat/lng, otherwise nearby
 export const getParkingSpaces = async (req, res) => {
   try {
-    const { lat, lng, radius = 5000 } = req.query; // radius in meters
+    const { lat, lng, radius = 5000 } = req.query;
 
-    let query = { isDeleted: { $ne: true } }; // exclude soft-deleted spaces
+    let query = { isDeleted: { $ne: true } };
 
     if (lat && lng) {
       query.location = {
