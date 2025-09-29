@@ -1,4 +1,5 @@
 // backend/routes/booking.js
+
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import {
@@ -9,7 +10,8 @@ import {
   deleteById,
   getProviderBookings,
   generateOTP,
-  verifyOTP
+  verifyOTP,
+  verifySecondOtp
 } from '../controllers/booking.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
@@ -24,6 +26,7 @@ router.get('/provider-bookings', protect, getProviderBookings);
 // OTP endpoints
 router.post('/:id/generate-otp', protect, generateOTP);
 router.post('/:id/verify-otp', protect, verifyOTP);
+router.post('/:id/verify-second-otp', protect, verifySecondOtp);
 
 // Status route
 router.put('/:id/status', protect, updateBookingStatus);
