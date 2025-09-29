@@ -75,6 +75,14 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+  secondOtp: {
+  type: String,
+  default: null,
+},
+secondOtpExpires: {
+  type: Date,
+  default: null,
+},
 
   createdAt: {
     type: Date,

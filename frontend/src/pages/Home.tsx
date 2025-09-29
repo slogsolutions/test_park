@@ -1,4 +1,4 @@
-// import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import Map, { Source, Layer } from 'react-map-gl';
 import { toast } from 'react-toastify';
 import { ParkingSpace } from '../types/parking';
@@ -16,7 +16,7 @@ import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen';
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+// import React, { useEffect, useState, useCallback, useRef } from 'react';
 
 
 export default function Home() {
