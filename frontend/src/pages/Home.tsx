@@ -26,7 +26,6 @@ export default function Home() {
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [searchRadius, setSearchRadius] = useState(5000);
   const [loading, setLoading] = useState(true);
   const [routeData, setRouteData] = useState<any>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -103,60 +102,13 @@ export default function Home() {
   // --------------------------------------------
 
   // Apply filters whenever parkingSpaces, filters, or searchQuery change
-  useEffect(() => {
-    if (parkingSpaces.length === 0) {
-      setFilteredSpaces([]);
-      return;
-    }
+  // TEMP: bypass all client-side filters for debugging
+useEffect(() => {
+  // directly show everything we got from the API so we can tell
+  // whether the backend returned all spaces.
+  setFilteredSpaces(parkingSpaces);
+}, [parkingSpaces]);
 
-    let filtered = parkingSpaces.filter(space => {
-      // Search query filter
-      if (searchQuery.trim() !== '') {
-        const query = searchQuery.toLowerCase();
-        const matchesTitle = space.title?.toLowerCase().includes(query);
-        const matchesDescription = space.description?.toLowerCase().includes(query);
-        const matchesAddress = space.address?.street?.toLowerCase().includes(query) || 
-                              space.address?.city?.toLowerCase().includes(query);
-        
-        if (!matchesTitle && !matchesDescription && !matchesAddress) {
-          return false;
-        }
-      }
-
-      // Price filter - only apply if user explicitly activated it
-      if (filters.isPriceFilterActive) {
-        const price = (space as any).__price?.discountedPrice ?? space.priceParking ?? space.price ?? 0;
-        const [minPrice, maxPrice] = filters.priceRange;
-        if (price < minPrice || price > maxPrice) {
-          return false;
-        }
-      }
-
-      // Amenities filter
-      const activeAmenityFilters = Object.entries(filters.amenities)
-        .filter(([_, isActive]) => isActive)
-        .map(([amenity]) => amenity);
-
-      if (activeAmenityFilters.length > 0) {
-        const spaceAmenities = space.amenities || [];
-        const spaceAmenitiesLower = spaceAmenities.map((amenity: string) => amenity.toLowerCase());
-        
-        const hasAllSelectedAmenities = activeAmenityFilters.every((amenityFilter) => 
-          spaceAmenitiesLower.some((spaceAmenity: string) => 
-            spaceAmenity.includes(amenityFilter.toLowerCase())
-          )
-        );
-        
-        if (!hasAllSelectedAmenities) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-
-    setFilteredSpaces(filtered);
-  }, [parkingSpaces, filters, searchQuery]);
 
   // Debounced popup close function
   const debouncedClosePopup = useCallback(() => {
@@ -273,7 +225,8 @@ export default function Home() {
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
       setLoading(true);
-      const spaces = await parkingService.getNearbySpaces(lat, lng, searchRadius);
+      const spaces = await parkingService.getAllSpaces();
+
 
       // Attach computed price meta to each space so list & popup can use it
       const spacesWithPrice = (spaces || []).map((s: any) => {
@@ -497,7 +450,7 @@ export default function Home() {
 
     try {
       setLoading(true);
-      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, searchRadius);
+      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, );
 
       // Attach price meta
       const spacesWithPrice = (spaces || []).map((s: any) => {
@@ -695,9 +648,6 @@ export default function Home() {
               <div className="text-sm font-semibold text-gray-700">
                 Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
               </div>
-              <div className="text-xs text-gray-500 mt-1">
-                Radius: {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-              </div>
             </div>
           </div>
         </div>
@@ -807,32 +757,7 @@ export default function Home() {
               <span>Near Me</span>
             </button>
 
-            {/* Radius Control */}
-            <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-600 font-semibold">Search Radius</span>
-                <span className="text-xs font-bold bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text">
-                  {searchRadius >= 1000 ? `${(searchRadius/1000).toFixed(1)} km` : `${searchRadius} m`}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1000"
-                max="100000"
-                step="1000"
-                value={searchRadius}
-                onChange={(e) => {
-                  const newRadius = parseInt(e.target.value);
-                  setSearchRadius(newRadius);
-                  if (currentLocation) {
-                    fetchNearbyParkingSpaces(currentLocation.lat, currentLocation.lng);
-                  } else if (searchedLocation) {
-                    fetchNearbyParkingSpaces(searchedLocation.lat, searchedLocation.lng);
-                  }
-                }}
-                className="w-full h-2 bg-gradient-to-r from-blue-200 to-purple-300 rounded-lg appearance-none cursor-pointer slider-thumb"
-              />
-            </div>
+            
           </div>
         </div>
         
@@ -843,8 +768,6 @@ export default function Home() {
             onSpaceSelect={(space) => {
               handleMarkerClick(space);
             }}
-            searchRadius={searchRadius}
-            onRadiusChange={setSearchRadius}
             filters={filters}
             userLocation={searchedLocation || currentLocation}
           />

@@ -55,8 +55,6 @@ export default function FilterParkingPage() {
       <ParkingSpaceList
         spaces={parkingSpaces}
         onSpaceSelect={(space) => navigate(`/space/${space._id}`)}
-        onRadiusChange={(radius) => handleFilterChange({ ...filters, radius })}
-        searchRadius={filters.radius || 5000}
       />
     </div>
   );

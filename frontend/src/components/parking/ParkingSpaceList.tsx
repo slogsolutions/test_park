@@ -110,7 +110,7 @@ export default function ParkingSpaceList({
     );
 
     // Check if within search radius (searchRadius is meters; distance is km)
-    if (distance > searchRadius / 1000) return false;
+  
 
     // Check amenities
     for (const [key, value] of Object.entries(filters.amenities)) {

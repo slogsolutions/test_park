@@ -122,7 +122,6 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
       style={{ 
         maxWidth: '360px',
         padding: 0,
-        borderRadius: '12px'
       }}
       closeOnMove={false}
     >
