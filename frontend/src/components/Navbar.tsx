@@ -108,86 +108,104 @@ export default function Navbar() {
   const shouldShowKYC = !(kycNormalized === "submitted" || kycNormalized === "approved");
   // -------------------------
 
+  // -------------------------
+  // MOBILE NAV (compact) - includes a touch-friendly role toggle button
+  // -------------------------
   if (isMobile) {
     return (
       <nav className="fixed bottom-0 left-0 w-full bg-white shadow-md border-t border-gray-200 z-50 dark:bg-gray-900 dark:border-gray-800">
-        <div className="flex justify-around py-3">
-          {isAuthenticated ? (
-            <>
-              <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
-                <MdHome className="h-6 w-6 home-icon" />
-              </Link>
+        <div className="flex justify-between items-center py-2 px-3">
+          <div className="flex items-center space-x-3">
+            <Link to="/" className={`flex items-center ${getNavItemClass("/")}`}>
+              <MdHome className="h-6 w-6 home-icon" />
+            </Link>
 
-              {/* Show KYC only if not approved */}
-              {shouldShowKYC && (
-                <Link to="/kyc" className={`flex flex-col items-center ${getNavItemClass("/kyc")}`}>
-                  <FileCheck className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">KYC</span>
+            {/* Conditionally show KYC / Register / Bookings / Dashboard icons (compact) */}
+            {isAuthenticated && (
+              <>
+                {shouldShowKYC ? (
+                  <Link to="/kyc" className={`flex items-center ${getNavItemClass("/kyc")}`}>
+                    <FileCheck className="h-5 w-5" />
+                  </Link>
+                ) : role === "seller" ? (
+                  <Link to="/register-parking" className={`flex items-center ${getNavItemClass("/register-parking")}`}>
+                    <MdMap className="h-5 w-5" />
+                  </Link>
+                ) : role === "buyer" ? (
+                  <Link to="/bookings" className={`flex items-center ${getNavItemClass("/bookings")}`}>
+                    <Calendar className="h-5 w-5" />
+                  </Link>
+                ) : null}
+
+                {role === "seller" && !shouldShowKYC && (
+                  <Link to="/dashboard" className={`flex items-center ${getNavItemClass("/dashboard")}`}>
+                    <LayoutDashboard className="h-5 w-5" />
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isAuthenticated ? (
+              <>
+                <Link to="/profileuser" className={`flex items-center ${getNavItemClass("/profileuser")}`}>
+                  <UserIcon className="h-6 w-6" />
                 </Link>
-              )}
 
-              {/* Register Space only visible for sellers AFTER KYC is approved */}
-              {!shouldShowKYC && role === "seller" && (
-                <Link
-                  to="/register-parking"
-                  className={`flex flex-col items-center ${getNavItemClass("/register-parking")}`}
+                <button
+                  onClick={logout}
+                  className="flex items-center text-red-600 hover:text-red-700"
+                  aria-label="Logout"
                 >
-                  <MdMap className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">Register Space</span>
+                  <LogOut className="h-5 w-5" />
+                </button>
+
+                {/* ---------- MOBILE ROLE TOGGLE (compact) ---------- */}
+                <button
+                  onClick={toggleRole}
+                  aria-label={`Switch to ${role === "seller" ? "Buyer" : "Seller"}`}
+                  title={`Switch to ${role === "seller" ? "Buyer" : "Seller"}`}
+                  className="ml-1 inline-flex items-center gap-2 px-2 py-1 rounded-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm"
+                >
+                  {/* small icon showing current role */}
+                  {role === "seller" ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-red-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M3 7l9-5 9 5v2H3V7zm1 4h16v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8z" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.418 0-8 1.79-8 4v2h16v-2c0-2.21-3.582-4-8-4z" />
+                    </svg>
+                  )}
+
+                  <span className="text-xs font-medium select-none">
+                    {role === "seller" ? "Seller" : "Buyer"}
+                  </span>
+                </button>
+              </>
+            ) : (
+              <>
+                <Link to="/login" className={`flex items-center ${getNavItemClass("/login")}`}>
+                  <UserIcon className="h-6 w-6" />
                 </Link>
-              )}
-
-              {/* Bookings link - only for buyers */}
-              {role === "buyer" && (
-                <Link to="/bookings" className={`flex flex-col items-center ${getNavItemClass("/bookings")}`}>
-                  <Calendar className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">My Bookings</span>
+                <Link
+                  to="/register"
+                  className="flex items-center bg-red-600 text-white px-3 py-1 rounded-md"
+                >
+                  <span className="text-sm">Register</span>
                 </Link>
-              )}
-
-              {role === "seller" && (
-                <Link to="/dashboard" className={`flex flex-col items-center ${getNavItemClass("/dashboard")}`}>
-                  <LayoutDashboard className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">Dashboard</span>
-                </Link>
-              )}
-
-              <Link to="/profileuser" className={`flex flex-col items-center ${getNavItemClass("/profileuser")}`}>
-                <UserIcon className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">{(user as any)?.name || "Profile"}</span>
-              </Link>
-
-              <button
-                onClick={logout}
-                className="flex flex-col items-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-              >
-                <LogOut className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">Logout</span>
-              </button>
-
-              <button onClick={toggleRole} className="flex flex-col items-center text-gray-700 dark:text-gray-300">
-                <span className="text-xs mt-1 font-medium">Switch to {role === "buyer" ? "Seller" : "Buyer"}</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className={`flex flex-col items-center ${getNavItemClass("/login")}`}>
-                <UserIcon className="h-6 w-6" />
-                <span className="text-xs">Login</span>
-              </Link>
-              <Link
-                to="/register"
-                className="flex flex-col items-center text-white bg-red-600 px-3 py-1 rounded-md hover:bg-red-700"
-              >
-                <span className="text-xs">Register</span>
-              </Link>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
       </nav>
     );
   }
 
+  // -------------------------
+  // DESKTOP / TABLET NAV
+  // -------------------------
   return (
     <nav className="bg-white shadow-lg z-50 relative dark:bg-gray-900 dark:border-b dark:border-gray-800">
       <div className="max-w-7xl mx-auto px-4">
@@ -253,7 +271,7 @@ export default function Navbar() {
                   <span>Logout</span>
                 </button>
 
-                {/* ---------- BEAUTIFUL ROLE TOGGLE (kept from your code) ---------- */}
+                {/* ---------- BEAUTIFUL ROLE TOGGLE (desktop) ---------- */}
                 <label
                   className="inline-flex items-center gap-3 select-none"
                   aria-label="Toggle role between Buyer and Seller"
