@@ -4,7 +4,7 @@ import { saveToken, removeToken } from "../controllers/userToken.js";
 
 const router = express.Router();
 
-router.post("/save-token" ,protect, saveToken);
-router.delete("/remove-token",protect, removeToken);
+router.post("/save-token" , saveToken);
+router.delete("/remove-token", removeToken);
 
 export default router;
