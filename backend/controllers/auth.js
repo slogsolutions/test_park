@@ -22,30 +22,39 @@ export const register = async (req, res) => {
 
   try {
     const { name, email, password } = req.body;
-    let user = await User.findOne({ email });
 
-    if (user) {
+    // prevent duplicates
+    const existing = await User.findOne({ email });
+    if (existing) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
     const verificationToken = crypto.randomBytes(20).toString('hex');
-    user = new User({
+    const user = new User({
       name,
       email,
       password,
       verificationToken,
-      verificationExpire: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
     });
 
+    // Save user - respond success regardless of email send result
     await user.save();
-    await sendVerificationEmail(email, verificationToken);
 
-    res.status(201).json({
-      message: 'Registration successful. Please check your email to verify your account.',
+    // try sending email, but don't fail the HTTP response if it throws
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (emailErr) {
+      console.error('Warning: sendVerificationEmail failed for', email, emailErr);
+      // optional: you can set a flag on user to retry sending later
+    }
+
+    return res.status(201).json({
+      message: 'User registered successfully. Please check your email for verification.',
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+  } catch (err) {
+    console.error('Register error:', err);
+    return res.status(500).json({ message: 'Registration failed on server' });
   }
 };
 

@@ -132,13 +132,13 @@ const ProviderLocations: React.FC = () => {
 
                 <div className="mt-4">
                   <p className="text-lg font-medium text-gray-700">
-                    ₹{location.priceParking} per 2 hour
+                    ₹{location.priceParking} per hour
                   </p>
                 </div>
 
                 <div className="flex justify-between mt-4">
                   <p className="text-lg font-medium text-gray-700">
-                    ₹{location.pricePerHour} Increse per hour
+                    ₹{location.pricePerHour} Increase per hour(overdue)
                   </p>
                   <p
                     className={`text-sm font-medium ${

@@ -32,9 +32,6 @@ interface ParkingArea {
   imageUrl: string;
   title?: string;
   description?: string;
-  rating?: number;
-  distance?: string;
-  price?: string;
 }
 
 const popularAreas: ParkingArea[] = [
@@ -43,54 +40,36 @@ const popularAreas: ParkingArea[] = [
     imageUrl: `${image1}`,
     title: 'Downtown Premium',
     description: '24/7 Secure Parking',
-    rating: 4.8,
-    distance: '0.5km',
-    price: '₹50/hr'
   },
   {
     id: '2',
     imageUrl: `${image7}`,
     title: 'Business District',
     description: 'Covered & Monitored',
-    rating: 4.6,
-    distance: '1.2km',
-    price: '₹45/hr'
   },
   {
     id: '3',
     imageUrl: `${image2}`,
     title: 'EV Charging',
     description: 'Spacious & Safe',
-    rating: 4.7,
-    distance: '0.8km',
-    price: '₹40/hr'
   },
   {
     id: '4',
     imageUrl: `${image4}`,
     title: 'Residential Zone',
     description: 'Peaceful & Secure',
-    rating: 4.9,
-    distance: '1.5km',
-    price: '₹35/hr'
   },
   {
     id: '5',
     imageUrl: `${image3}`,
     title: 'Covered Parking',
     description: 'Ample Space Available',
-    rating: 4.5,
-    distance: '2.1km',
-    price: '₹55/hr'
   },
   {
     id: '6',
     imageUrl: `${image9}`, 
     title: 'Premium Parking',
     description: 'Long-term Security',
-    rating: 4.8,
-    distance: '3.2km',
-    price: '₹60/hr'
   }
 ];
 
@@ -385,7 +364,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
                     </div>
 
                     {/* Rating and Price Badges */}
-                    <div className="absolute top-2 left-2 flex items-center space-x-1 bg-black/50 rounded-full px-2 py-1">
+                    {/* <div className="absolute top-2 left-2 flex items-center space-x-1 bg-black/50 rounded-full px-2 py-1">
                       <Star className="w-3 h-3 text-yellow-400 fill-current" />
                       <span className="text-white text-xs font-medium">{area.rating}</span>
                     </div>
@@ -395,9 +374,9 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
                     </div>
 
                     {/* Distance Badge */}
-                    <div className="absolute bottom-2 right-2 bg-white/90 text-gray-900 text-xs rounded-full px-2 py-1 font-medium">
+                    {/* <div className="absolute bottom-2 right-2 bg-white/90 text-gray-900 text-xs rounded-full px-2 py-1 font-medium">
                       {area.distance}
-                    </div>
+                    </div>  */}
                   </div>
                 </motion.div>
               </FloatingElement>

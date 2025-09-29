@@ -4,6 +4,8 @@ import { AuthState, User } from '../types/auth';
 import { authService } from '../services/auth.service';
 import axios from "axios";
 import api from '../utils/api';
+import { toast } from 'react-toastify';
+
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
@@ -118,10 +120,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return data;
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Registration failed';
-      dispatch({ type: 'LOGIN_FAIL', payload: message });
-      throw message;
-    }
+  const message = error.response?.data?.message || 'Registration failed';
+  dispatch({ type: 'LOGIN_FAIL', payload: message });
+  // Throw an Error object so callers can read `.message`
+  throw new Error(message);
+}
+
   };
 
   const googleLogin = async (credential: string) => {
