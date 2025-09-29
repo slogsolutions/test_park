@@ -44,7 +44,6 @@ export function Sidebar({
     { icon: PlusSquare, label: 'Register Space', id: 'register' },
     { icon: LucideParkingMeter, label: 'Spaces', id: 'spaces' },
     { icon: BellRing, label: 'Requests', id: 'requests' },
-    { icon: UserCircle, label: 'Profile', id: 'profile' },
   ];
 
   // accessible keyboard handler for toggles (Enter / Space)
