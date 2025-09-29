@@ -25,7 +25,7 @@ export function BottomNav({ currentPage, onNavigate }: BottomNavProps) {
     // { icon: WalletCards, label: 'Wallet', id: 'wallet' },
     { icon: LucideParkingMeter, label: 'Spaces', id: 'ProviderDash' },
     // { icon: UserCircle, label: 'BookedSlots', id: 'BookedSlots' },
-    { icon: UserCircle, label: 'profile', id: 'Profile' },
+
   ];
   const navigate=useNavigate()
 
