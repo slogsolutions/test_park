@@ -22,7 +22,6 @@ import AdminPanel from "./pages/Admin";
 import VehicleDetails from "./pages/VehicleDetails";
 import MyBookings from "./components/parking/MyBookings";
 import ProviderBookings from "./pages/ProivderBookings";
-// import Page from "./pages/Page";
 import AddVehicle from "./pages/AddVechicle";
 import VehicleList from "./pages/VehicleList";
 import TrackNowPage from "./components/parking/TrackNowPage";
@@ -39,6 +38,9 @@ import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
 import { useState } from "react";
 import EditProfile from './pages/EditProfile';
 
+// NEW: import SocketProvider
+import { SocketProvider } from "./context/SocketContext";
+
 export default function App() {
 
   // useFirebaseMessaging();
@@ -47,11 +49,14 @@ export default function App() {
     <GoogleOAuthProvider clientId={env.GOOGLE_CLIENT_ID}>
       <AuthProvider>
         <RoleProvider>
-          <MapProvider>
-            <Router>
-              <AppRoutes />
-            </Router>
-          </MapProvider>
+          {/* Wrap SocketProvider so sockets are available throughout the app */}
+          <SocketProvider>
+            <MapProvider>
+              <Router>
+                <AppRoutes />
+              </Router>
+            </MapProvider>
+          </SocketProvider>
         </RoleProvider>
       </AuthProvider>
     </GoogleOAuthProvider>

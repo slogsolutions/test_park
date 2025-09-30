@@ -44,6 +44,17 @@ const parkingSpaceSchema = new mongoose.Schema({
     zipCode: String,
     country: String,
   },
+  totalSpots: {
+    type: Number,
+    required: true,
+    default: 1
+  },
+  // current available spots
+  availableSpots: {
+    type: Number,
+    required: true,
+    default: 1
+  },
   priceParking: {
     type: Number,
   },

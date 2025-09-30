@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LoadingScreen from './LoadingScreen';
+import { useSocket } from '../context/SocketContext';
 
 interface Booking {
   id?: string;         // some code used booking.id
@@ -33,10 +34,34 @@ const ProviderBookings = () => {
   const [rejectReason, setRejectReason] = useState('');
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
 
+  const socket = useSocket();
+
+  const API_BASE = import.meta.env.VITE_BASE_URL;
+
+  const fetchBookings = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/booking/provider-bookings`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch bookings');
+
+      const data = await response.json();
+      setBookings(data);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStatusChange = async (bookingId:any, newStatus:any) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
+      const response = await fetch(`${API_BASE}/api/booking/${bookingId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -65,31 +90,57 @@ const ProviderBookings = () => {
   };
 
   useEffect(() => {
-    const fetchBookings = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/provider-bookings`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
+    // initial load
+    fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-        if (!response.ok) throw new Error('Failed to fetch bookings');
+  useEffect(() => {
+    if (!socket) return;
 
-        const data = await response.json();
-        setBookings(data);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
+    // Update booking parkingSpace.availableSpots when backend emits parking changes
+    const handleParkingUpdate = (data: { parkingId?: string; availableSpots?: number } | any) => {
+      if (!data) return;
+      const parkingId = data.parkingId || data._id || data.id;
+      const availableSpots = typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
+      if (!parkingId || typeof availableSpots !== 'number') return;
+
+      setBookings((prev) =>
+        prev.map((b: any) => {
+          const ps = b.parkingSpace;
+          const pid = ps && (ps._id ? String(ps._id) : ps.id ? String(ps.id) : null);
+          if (pid && pid === String(parkingId)) {
+            return { ...b, parkingSpace: { ...ps, availableSpots } };
+          }
+          return b;
+        })
+      );
     };
 
-    fetchBookings();
-  }, []);
+    // On booking events, refresh the list to keep authoritative state
+    const handleBookingEvent = (payload: any) => {
+      // payload may be { bookingId } or similar; we refetch list instead of partial update
+      fetchBookings();
+    };
+
+    socket.on('parking-updated', handleParkingUpdate);
+    socket.on('parking-released', handleParkingUpdate);
+
+    socket.on('booking-confirmed', handleBookingEvent);
+    socket.on('booking-completed', handleBookingEvent);
+
+    return () => {
+      socket.off('parking-updated', handleParkingUpdate);
+      socket.off('parking-released', handleParkingUpdate);
+      socket.off('booking-confirmed', handleBookingEvent);
+      socket.off('booking-completed', handleBookingEvent);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket]);
 
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
-      await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/reject/${bookingId}`, { 
+      await fetch(`${API_BASE}/api/booking/reject/${bookingId}`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
         body: JSON.stringify({ reason }),
