@@ -223,26 +223,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+
+  //Logout OLD
+  // const logout = async () => {
+  //   const token = localStorage.getItem('fcm_token');
+  //   if (token) {
+  //     await api.delete('/users/delete-token', { data: { fcmToken: token } } as any);
+  //     localStorage.removeItem('fcm_token');
+  //   }
+  //   localStorage.removeItem('token');
+  //   dispatch({ type: 'LOGOUT' });
+  //   setGlobalUserForRN(null);
+  //   try {
+  //     if ((window as any).ReactNativeWebView?.postMessage) {
+  //       (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'USER_INFO', user: null }));
+  //       console.log('[WEB DEBUG] Sent USER_INFO(null) on logout to RN');
+  //     } else {
+  //       console.log('[WEB DEBUG] ReactNativeWebView not available at logout time');
+  //     }
+  //   } catch (e) {
+  //     console.warn('[WEB DEBUG] error sending logout USER_INFO to RN', e);
+  //   }
+  // };
+
   const logout = async () => {
-    const token = localStorage.getItem('fcm_token');
-    if (token) {
-      await api.delete('/users/remove-token', { data: { fcmToken: token } } as any);
-      localStorage.removeItem('fcm_token');
+  try {
+    const fcmToken = localStorage.getItem("fcm_token");
+
+    if (fcmToken) {
+      // Call your backend delete-token endpoint (POST)
+      await api.post("/users/delete-token", { fcmToken });
+      localStorage.removeItem("fcm_token");
     }
-    localStorage.removeItem('token');
-    dispatch({ type: 'LOGOUT' });
+
+    // remove auth/session token
+    localStorage.removeItem("token");
+
+    // update state/context
+    dispatch({ type: "LOGOUT" });
     setGlobalUserForRN(null);
-    try {
-      if ((window as any).ReactNativeWebView?.postMessage) {
-        (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'USER_INFO', user: null }));
-        console.log('[WEB DEBUG] Sent USER_INFO(null) on logout to RN');
-      } else {
-        console.log('[WEB DEBUG] ReactNativeWebView not available at logout time');
-      }
-    } catch (e) {
-      console.warn('[WEB DEBUG] error sending logout USER_INFO to RN', e);
+
+    // notify React Native WebView (if present)
+    if ((window as any).ReactNativeWebView?.postMessage) {
+      (window as any).ReactNativeWebView.postMessage(
+        JSON.stringify({ type: "USER_INFO", user: null })
+      );
+      console.log("[WEB DEBUG] Sent USER_INFO(null) on logout to RN");
+    } else {
+      console.log("[WEB DEBUG] ReactNativeWebView not available at logout time");
     }
-  };
+  } catch (e) {
+    console.warn("[WEB DEBUG] error during logout:", e);
+  }
+};
 
   const setUser = (user: User | null) => {
     if (user) {
