@@ -91,7 +91,7 @@ export const useFirebaseMessaging = (user: any) => {
         if (Notification.permission !== "granted") {
           const permission = await Notification.requestPermission();
           if (permission !== "granted") {
-            console.log("Notification permission not granted");
+            console.log("1.a Notification permission not granted");
             return;
           }
         }
@@ -100,7 +100,7 @@ export const useFirebaseMessaging = (user: any) => {
           vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
         });
 
-        console.log("FCM token:", token);
+        console.log("1.b FCM token:", token);
         if (!token) return;
 
         // read saved token object { token, userId } from local storage
@@ -132,9 +132,9 @@ export const useFirebaseMessaging = (user: any) => {
               fcmToken: token,
               deviceInfo: navigator.userAgent,
             });
-            console.log("Saved FCM token to backend (or reassigned).");
+            console.log("2. Saved FCM token to backend (or reassigned). measn token changed or saved new");
           } catch (err) {
-            console.error("Failed to save token to backend:", err);
+            console.error("2.b Failed to save token to backend:", err);
             // Optionally remove local entry so next attempt retries:
             // localStorage.removeItem(localKey);
           }
@@ -143,7 +143,7 @@ export const useFirebaseMessaging = (user: any) => {
           if (mounted) setFcmToken(saved!.token);
         }
       } catch (err) {
-        console.error("FCM token error:", err);
+        console.error("3. FCM token error:", err);
       }
     };
 
