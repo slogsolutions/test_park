@@ -1,53 +1,109 @@
 import React from "react";
 
 const PaymentPage = ({ booking }) => {
-  const handlePayment = () => {
-    const options = {
-      key: "rzp_test_eQoJ7XZxUf37D7", // Replace with your Razorpay Key
-      amount: booking.totalPrice * 100, // Amount in paise
-      currency: "INR",
-      name: "Parking Booking Payment",
-      description: `Payment for booking ID: ${booking._id}`,
-      image: "/path/to/your/logo.png", // Optional logo
-      handler: async function (response) {
-        // Payment was successful
-        alert("Payment successful");
-        console.log(response);
+  const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
+  const RZP_KEY = import.meta.env.VITE_RAZORPAY_KEY || "rzp_test_eQoJ7XZxUf37D7";
 
-        // Call API to update payment status
-        try {
-          const res = await fetch(`http://localhost:5000/api/booking/${booking._id}/update-payment-status`, {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${localStorage.getItem("token")}`, // Replace with your auth mechanism
-            },
-            body: JSON.stringify({ paymentStatus: "paid" }),
-          });
+  const handlePayment = async () => {
+    try {
+      // 1) Create Razorpay order on backend
+      const initRes = await fetch(`${API_BASE}/payment/initiate-payment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+        },
+        body: JSON.stringify({
+          bookingId: booking._id,
+          amount: booking.totalPrice, // INR, backend multiplies to paise
+        }),
+      });
 
-          if (!res.ok) {
-            const error = await res.json();
-            alert(`Failed to update payment status: ${error.message}`);
-          } else {
-            alert("Payment status updated successfully.");
+      if (!initRes.ok) {
+        const e = await initRes.json().catch(() => ({}));
+        alert(`Failed to initiate payment: ${e.error || initRes.statusText}`);
+        return;
+      }
+
+      const { orderId, amount, currency } = await initRes.json();
+
+      // 2) Open Razorpay checkout using the created order
+      const options = {
+        key: RZP_KEY,
+        amount,                  // from backend (already in paise)
+        currency: currency || "INR",
+        name: "Parking Booking Payment",
+        description: `Payment for booking ID: ${booking._id}`,
+        order_id: orderId,       // <-- IMPORTANT
+        handler: async function (response) {
+          // response has: razorpay_payment_id, razorpay_order_id, razorpay_signature
+          try {
+            const verifyRes = await fetch(`${API_BASE}/payment/verify-payment`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+              },
+              body: JSON.stringify({
+                bookingId: booking._id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+
+            if (!verifyRes.ok) {
+              if (verifyRes.status === 409) {
+                const data = await verifyRes.json().catch(() => ({}));
+                alert(
+                  data.error ||
+                    "Payment succeeded but no spot remained. Please contact support."
+                );
+                return;
+              }
+              const data = await verifyRes.json().catch(() => ({}));
+              alert(data.error || "Payment verification failed. Please contact support.");
+              return;
+            }
+
+            const result = await verifyRes.json();
+            // Backend has now decremented availableSpots atomically.
+            // If you want instant UI update in addition to sockets:
+            // - result.parking has updated availableSpots
+            // - update your local/global parking list here if needed.
+
+            alert("Payment verified successfully! Your spot is reserved.");
+            console.log("Verify result:", result);
+          } catch (err) {
+            console.error("Error verifying payment:", err);
+            alert("An error occurred while verifying payment.");
           }
-        } catch (err) {
-          console.error("Error updating payment status:", err);
-          alert("An error occurred while updating payment status.");
-        }
-      },
-      prefill: {
-        name: "User Name", // Optional: Prefill user details
-        email: "user@example.com",
-        contact: "1234567890",
-      },
-      theme: {
-        color: "#3399cc",
-      },
-    };
+        },
+        prefill: {
+          name: "User Name",
+          email: "user@example.com",
+          contact: "1234567890",
+        },
+        theme: { color: "#3399cc" },
+        modal: {
+          ondismiss: function () {
+            // User closed Razorpay modal
+            console.log("Razorpay modal closed by user");
+          },
+        },
+      };
 
-    const rzp = new window.Razorpay(options);
-    rzp.open();
+      if (!window.Razorpay) {
+        alert("Razorpay SDK not loaded. Please check your script include.");
+        return;
+      }
+
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+    } catch (err) {
+      console.error("Payment init/open error:", err);
+      alert("Failed to start payment. Please try again.");
+    }
   };
 
   return (
@@ -59,7 +115,8 @@ const PaymentPage = ({ booking }) => {
           <span className="font-medium">{booking._id}</span>
         </p>
         <p className="text-gray-800 mb-6">
-          Total Price: <span className="font-bold text-green-600">₹{booking.totalPrice}</span>
+          Total Price:{" "}
+          <span className="font-bold text-green-600">₹{booking.totalPrice}</span>
         </p>
         <button
           onClick={handlePayment}

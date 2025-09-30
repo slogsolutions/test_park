@@ -13,7 +13,7 @@ export default function FindParking() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [loading, setLoading] = useState(false);
   const [providers, setProviders] = useState<any[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState(null);
+  const [selectedProvider, setSelectedProvider] = useState<any | null>(null);
   const { user } = useAuth();
   const [viewport, setViewport] = useState({
     latitude: 0,
@@ -39,35 +39,34 @@ export default function FindParking() {
   };
 
   // If user clicks Search (explicit), call nearby
-const handleSearch = async () => {
-  if (!coords) {
-    alert('Please enter a location or use "Find My Location"');
-    return;
-  }
+  const handleSearch = async () => {
+    if (!coords) {
+      alert('Please enter a location or use "Find My Location"');
+      return;
+    }
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    // ✅ Fetch ALL spaces instead of nearby with radius
-    const results = await parkingService.getAllSpaces();
+    try {
+      // ✅ Fetch ALL spaces instead of nearby with radius
+      const results = await parkingService.getAllSpaces();
 
-    setProviders(results);
+      setProviders(results);
 
-    socket.emit('notify-nearby-providers', {
-      userLat: coords.lat,
-      userLng: coords.lng,
-      userId: user?._id,
-      userName: user?.name,
-      userVehicle: user?.vehicle || 'Unknown Vehicle',
-      userContact: user?.phone || 'No Contact Info',
-    });
-  } catch (error) {
-    console.error('Error fetching parking spots:', error);
-  }
+      socket.emit('notify-nearby-providers', {
+        userLat: coords.lat,
+        userLng: coords.lng,
+        userId: user?._id,
+        userName: user?.name,
+        userVehicle: user?.vehicle || 'Unknown Vehicle',
+        userContact: user?.phone || 'No Contact Info',
+      });
+    } catch (error) {
+      console.error('Error fetching parking spots:', error);
+    }
 
-  setLoading(false);
-};
-
+    setLoading(false);
+  };
 
   // On mount: if there is no explicit search or coords, fetch ALL spaces so markers show across map
   useEffect(() => {
@@ -91,11 +90,40 @@ const handleSearch = async () => {
 
   // Listen for provider acceptance
   useEffect(() => {
-    socket.on('provider-accepted', (providerData) => {
+    socket.on('provider-accepted', (providerData: any) => {
       setSelectedProvider(providerData);
     });
     return () => {
       socket.off('provider-accepted');
+    };
+  }, []);
+
+  // Listen for parking availability updates from backend and update providers state
+  useEffect(() => {
+    const handleParkingUpdate = (data: { parkingId?: string; availableSpots?: number } | any) => {
+      if (!data) return;
+      const parkingId = data.parkingId || data._id || data.id;
+      const availableSpots = typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
+      if (!parkingId || typeof availableSpots !== 'number') return;
+
+      setProviders((prev) =>
+        prev.map((p) => {
+          // compare both string and object id cases
+          const pid = p._id ? (typeof p._id === 'string' ? p._id : String(p._id)) : (p.id || '');
+          if (pid === parkingId.toString()) {
+            return { ...p, availableSpots };
+          }
+          return p;
+        })
+      );
+    };
+
+    socket.on('parking-updated', handleParkingUpdate);
+    socket.on('parking-released', handleParkingUpdate);
+
+    return () => {
+      socket.off('parking-updated', handleParkingUpdate);
+      socket.off('parking-released', handleParkingUpdate);
     };
   }, []);
 

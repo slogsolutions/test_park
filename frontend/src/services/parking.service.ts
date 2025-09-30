@@ -113,6 +113,60 @@ export const parkingService = {
     const response = await api.delete(`/parking/${spaceId}`);
     return response.data;
   },
+
+  /**
+   * Initiate a Razorpay payment for a booking.
+   * - bookingId: id of the booking created on backend
+   * - amount: amount in INR (number). Backend expects amount and creates order.
+   *
+   * Returns: { orderId, amount, currency } (whatever backend/razorpay order returns)
+   */
+  async initiatePayment(bookingId: string, amount: number) {
+    const token = localStorage.getItem('token');
+    const response = await api.post(
+      '/payment/initiate-payment',
+      { bookingId, amount },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Verify a Razorpay payment after checkout.
+   * Payload must include: bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature
+   *
+   * Backend responds with booking and updated parking object (use parking to update UI counts).
+   */
+  async verifyPayment(payload: {
+    bookingId: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
+    const token = localStorage.getItem('token');
+    const response = await api.post('/payment/verify-payment', payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Fetch availability summary for a single parking space.
+   * Useful after verifyPayment or as a polling fallback to refresh the spot count.
+   * Backend should return at least { availableSpots, totalSpots } in the parking object.
+   */
+  async getAvailability(spaceId: string) {
+    const response = await api.get(`/parking/${spaceId}`);
+    return response.data;
+  },
 };
 
 export default parkingService;

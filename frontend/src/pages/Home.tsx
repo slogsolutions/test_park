@@ -16,11 +16,13 @@ import { SearchBar } from './SearchBar';
 import { SearchOverlay } from './SearchOverlayProps';
 import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen';
+import { useSocket } from '../context/SocketContext';
 
 export default function Home() {
   const { viewport, setViewport } = useMapContext();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const socket = useSocket();
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [filteredSpaces, setFilteredSpaces] = useState<ParkingSpace[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
@@ -109,6 +111,54 @@ useEffect(() => {
   setFilteredSpaces(parkingSpaces);
 }, [parkingSpaces]);
 
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleParkingUpdate = (data: any) => {
+      if (!data) return;
+      const parkingId = data.parkingId || data._id || data.id;
+      const availableSpots = typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
+      if (!parkingId || typeof availableSpots !== 'number') return;
+
+      setParkingSpaces((prev) =>
+        prev.map((s: any) => {
+          const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
+          if (sid === String(parkingId)) {
+            return { ...s, availableSpots };
+          }
+          return s;
+        })
+      );
+
+      setFilteredSpaces((prev) =>
+        prev.map((s: any) => {
+          const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
+          if (sid === String(parkingId)) {
+            return { ...s, availableSpots };
+          }
+          return s;
+        })
+      );
+
+      // If the selected space is the one updated, refresh it
+      setSelectedSpace((prev) => {
+        if (!prev) return prev;
+        const sid = prev._id ? (typeof prev._id === 'string' ? prev._id : String(prev._id)) : prev.id;
+        if (sid === String(parkingId)) {
+          return { ...prev, availableSpots };
+        }
+        return prev;
+      });
+    };
+
+    socket.on('parking-updated', handleParkingUpdate);
+    socket.on('parking-released', handleParkingUpdate);
+
+    return () => {
+      socket.off('parking-updated', handleParkingUpdate);
+      socket.off('parking-released', handleParkingUpdate);
+    };
+  }, [socket]);
 
   // Debounced popup close function
   const debouncedClosePopup = useCallback(() => {

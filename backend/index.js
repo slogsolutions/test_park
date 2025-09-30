@@ -52,6 +52,8 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+app.set('io', io);           // <<-- add this so routes can do req.app.get('io')
+global.io = io; 
 
 // Connect DB
 // connectDB should use process.env.MONGODB_URI internally
