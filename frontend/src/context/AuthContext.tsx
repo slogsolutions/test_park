@@ -228,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // const logout = async () => {
   //   const token = localStorage.getItem('fcm_token');
   //   if (token) {
-  //     await api.delete('/users/remove-token', { data: { fcmToken: token } } as any);
+  //     await api.delete('/users/delete-token', { data: { fcmToken: token } } as any);
   //     localStorage.removeItem('fcm_token');
   //   }
   //   localStorage.removeItem('token');
