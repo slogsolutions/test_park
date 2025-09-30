@@ -25,7 +25,7 @@ router.post('/initiate-payment', protect, async (req, res) => {
 
   try {
     const options = {
-      amount: amount * 100, // Convert amount to smallest currency unit (e.g., paise)
+      amount: Math.round(amount * 100), // Convert amount to smallest currency unit (e.g., paise)
       currency: 'INR',
       receipt: `receipt_${bookingId}`,
     };

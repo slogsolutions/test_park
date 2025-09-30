@@ -557,6 +557,30 @@ export const generateOTP = async (req, res) => {
     return res.status(500).json({ message: 'Failed to generate OTP', error: error.message });
   }
 };
+// safeDecrement.js (or inside booking.js)
+export const decrementParkingAvailable = async (parkingId) => {
+  if (!parkingId) return null;
+  // Atomically decrement but do not go below 0; return updated doc
+  const updated = await ParkingSpace.findOneAndUpdate(
+    { _id: parkingId, $expr: { $gt: ['$availableSpots', 0] } }, // only if > 0
+    { $inc: { availableSpots: -1 } },
+    { new: true }
+  );
+
+  // If the doc matched, emit socket update for front-end
+  if (updated && global.io) {
+    try {
+      global.io.emit('parking-updated', {
+        parkingId: updated._id.toString(),
+        availableSpots: updated.availableSpots,
+      });
+    } catch (e) {
+      console.warn('socket emit error (parking-updated)', e);
+    }
+  }
+  return updated;
+};
+
 
 export const verifyOTP = async (req, res) => {
   try {
