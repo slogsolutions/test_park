@@ -132,17 +132,6 @@ const ProviderBookings = () => {
 
   const handleStatusChange = async (bookingId: any, newStatus: any) => {
     try {
-<<<<<<< HEAD
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
-=======
       const token = localStorage.getItem("token");
       const response = await fetch(
         `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
@@ -155,7 +144,6 @@ const ProviderBookings = () => {
           body: JSON.stringify({ status: newStatus }),
         }
       );
->>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
 
       if (!response.ok) {
         const error = await response.json();
@@ -168,25 +156,16 @@ const ProviderBookings = () => {
 
       setBookings((prevBookings: any) =>
         prevBookings.map((booking: any) =>
-<<<<<<< HEAD
-          booking._id === bookingId ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId } : booking
-=======
           booking._id === bookingId
             ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId }
             : booking
->>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
         )
       );
 
       alert(`Booking status updated to ${newStatus}.`);
     } catch (err) {
-<<<<<<< HEAD
-      console.error('Error updating status:', err);
-      alert('Failed to update status.');
-=======
       console.error("Error updating status:", err);
       alert("Failed to update status.");
->>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
     }
   };
 
@@ -209,17 +188,6 @@ const ProviderBookings = () => {
 
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
-<<<<<<< HEAD
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: 'rejected', reason }),
-      });
-=======
       const token = localStorage.getItem("token");
       const response = await fetch(
         `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
@@ -232,7 +200,6 @@ const ProviderBookings = () => {
           body: JSON.stringify({ status: "rejected", reason }),
         }
       );
->>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
 
       if (!response.ok) {
         const error = await response.json();
@@ -246,13 +213,8 @@ const ProviderBookings = () => {
           : booking
       ));
     } catch (error) {
-<<<<<<< HEAD
-      console.error('Failed to reject booking', error);
-      alert('Failed to reject booking.');
-=======
       console.error("Failed to reject booking", error);
       alert("Failed to reject booking.");
->>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
     }
   };
 
