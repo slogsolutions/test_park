@@ -98,12 +98,16 @@ const ProviderBookings = () => {
   };
 
   // helper: return true if current time is >= booking startTime (OTP entry allowed only after start for buyer)
-  const canEnterOtp = (booking: Booking) => {
-    if (!booking.startTime) return false;
-    const startTs = new Date(booking.startTime).getTime();
-    if (isNaN(startTs)) return false;
-    return Date.now() >= startTs;
-  };
+ const canEnterOtp = (booking: Booking) => {
+  if (!booking.startTime) return false;
+  const startTs = new Date(booking.startTime).getTime();
+  if (isNaN(startTs)) return false;
+
+  // allow entering OTP from 15 minutes before startTime
+  const allowedFrom = startTs - 15 * 60 * 1000; // 15 minutes in ms
+  return Date.now() >= allowedFrom;
+};
+
 
   // helper: only allow cancellation if current time is earlier than 24 hours before start
   const canCancelBooking = (booking: Booking) => {
@@ -735,7 +739,7 @@ const ProviderBookings = () => {
                         <div className="flex items-center justify-between mb-3">
                            <span className="text-sm font-bold text-blue-800 dark:text-blue-300 flex items-center">
                               <Key className="h-4 w-4 text-blue-600 dark:text-blue-400 mr-2" />
-                              Start Session OTP Verification
+                              Verify CHECK IN OTP
                            </span>
                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">Session ID: {stableId.slice(-6)}</span>
                         </div>
@@ -777,12 +781,13 @@ const ProviderBookings = () => {
                     )}
 
                     {/* 3. End Session OTP Verification (Active/Confirmed) */}
-                    {(booking.status === 'confirmed' || booking.status === 'active') && (
+                    {(booking.status === 'confirmed' || booking.status === 'active' || booking.status === 'overdue' ) && (
                       <div className="bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-300 dark:border-emerald-800 p-4 shadow-inner">
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-bold text-emerald-800 dark:text-emerald-300 flex items-center">
                             <Clock className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mr-2" />
-                            Session {!booking.startedAt ? 'Confirmed' : 'Active'} - End OTP
+                            {/* Session {!booking.startedAt ? 'Confirmed' : 'Active'} - End OTP */}
+                            Verify CHECK OUT OTP
                           </span>
                           <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{booking.startedAt ? 'Started' : 'Awaiting Start'}</span>
                         </div>

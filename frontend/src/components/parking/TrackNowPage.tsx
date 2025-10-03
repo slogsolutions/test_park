@@ -176,8 +176,8 @@ export default function TrackNowPage() {
 
   const otpLabel =
     booking && booking.status === "active" && booking.secondOtp
-      ? "Second OTP (Show to provider when leaving)"
-      : "First OTP (Show to provider to start session)";
+      ? "CHECK OUT OTP"
+      : "CHECK IN OTP";
 
   const routeLayer = {
     id: "route",

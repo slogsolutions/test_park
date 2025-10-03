@@ -15,32 +15,13 @@ const razorpay = new Razorpay({
   key_secret: RAZORPAY_KEY_SECRET,
 });
 
-/**
- * normalizeToPaise
- * - If opts.isPaise === true -> treat incoming value as integer paise (round and return)
- * - Otherwise (isPaise === false or undefined) -> treat incoming value as rupees and convert to paise (multiply by 100)
- *
- * NOTE: We intentionally do NOT attempt heuristic guessing. The frontend should pass isPaise=true when sending paise.
- */
 function normalizeToPaise(amount, opts = { isPaise: undefined }) {
   const parsed = Number(amount);
   if (Number.isNaN(parsed) || parsed <= 0) return null;
-
-  if (opts.isPaise === true) {
-    return Math.round(parsed); // already paise (integer)
-  }
-
-  // treat as rupees (default)
-  // allow decimals (e.g. 45.5 -> 4550 paise)
+  if (opts.isPaise === true) return Math.round(parsed);
   return Math.round(parsed * 100);
 }
 
-/**
- * POST /api/payment/initiate-payment
- * body: { bookingId, amount, isPaise? }
- *
- * amount: either rupees (e.g. 45 or 45.5) or paise (e.g. 4500) when isPaise === true
- */
 router.post('/initiate-payment', protect, async (req, res) => {
   try {
     const { bookingId, amount, isPaise } = req.body;
@@ -68,13 +49,12 @@ router.post('/initiate-payment', protect, async (req, res) => {
       payment_capture: 1,
     };
 
-    console.log('[initiate-payment] creating order', { bookingId, amountPaise, isPaise });
     const order = await razorpay.orders.create(options);
 
     return res.status(200).json({
       success: true,
       orderId: order.id,
-      amount: order.amount, // paise
+      amount: order.amount,
       currency: order.currency,
       receipt: order.receipt,
       bookingId,
@@ -87,18 +67,11 @@ router.post('/initiate-payment', protect, async (req, res) => {
 
 /**
  * POST /api/payment/verify-payment
- * body: { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature, extend?, isPaise? }
- *
- * Behavior:
- *  - verify signature
- *  - fetch payment to obtain captured amount (preferred)
- *  - increment booking.totalPrice by paid amount (in rupees)
- *  - set booking.paymentStatus = 'paid'
- *  - if extend true => extend endTime by 1 hour, generate secondOtp and secondOtpExpires and return it
+ * body: { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature, extend?, isPaise?, fine? }
  */
 router.post('/verify-payment', protect, async (req, res) => {
   try {
-    const { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature, extend } = req.body;
+    const { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature, extend, fine } = req.body;
     if (!bookingId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return res.status(400).json({ success: false, message: 'Missing required verification fields' });
     }
@@ -114,20 +87,16 @@ router.post('/verify-payment', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid payment signature' });
     }
 
-    // fetch payment (preferred) to get exact captured amount
+    // try to fetch payment to get captured amount
     let paidPaise = null;
     try {
       const payment = await razorpay.payments.fetch(razorpay_payment_id);
       paidPaise = Number(payment.amount); // paise
-      console.log('[verify-payment] payment fetched', { paymentId: razorpay_payment_id, paidPaise, captured: payment.captured });
     } catch (errFetch) {
       console.warn('[verify-payment] payment fetch failed', errFetch);
-      // fallback to fetching order if necessary (less preferred)
       try {
         const order = await razorpay.orders.fetch(razorpay_order_id);
-        // The order.amount is the order's total amount; payment may be different — but use fallback if needed
         paidPaise = Number(order.amount);
-        console.log('[verify-payment] fallback using order.amount', { orderId: razorpay_order_id, paidPaise });
       } catch (errOrder) {
         console.error('[verify-payment] order fetch fallback failed', errOrder);
       }
@@ -137,40 +106,50 @@ router.post('/verify-payment', protect, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Unable to determine paid amount from Razorpay' });
     }
 
-    const paidRupees = Number((paidPaise / 100.0).toFixed(2)); // rupees with two decimals
+    const paidRupees = Number((paidPaise / 100.0).toFixed(2));
 
     // update booking safely (increment)
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
 
     const previousTotal = Number(booking.totalPrice || 0);
-    booking.totalPrice = Number((previousTotal + paidRupees).toFixed(2)); // store with two decimals
+    booking.totalPrice = Number((previousTotal + paidRupees).toFixed(2));
     booking.paymentStatus = 'paid';
 
-    // if extension: extend endTime by 1 hour and generate secondOtp
     let generatedOtp = null;
+
+    // If this payment is an extension (extend === true), extend endTime by 1 hour
     if (extend === true || extend === 'true' || extend === 1) {
       const currentEndTs = booking.endTime ? new Date(booking.endTime).getTime() : Date.now();
       const baseTs = isNaN(currentEndTs) ? Date.now() : currentEndTs;
       booking.endTime = new Date(baseTs + 60 * 60 * 1000);
+      // Keep session active/state as-is; server will emit booking-updated
+    }
+
+    // If this payment is a fine (user paid because booking was overdue)
+    if (fine === true || fine === 'true' || fine === 1) {
+      // DO NOT change endTime or set status to active here.
+      // We only generate secondOtp (checkout OTP) and keep booking.status as-is (likely 'overdue').
       generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       booking.secondOtp = generatedOtp;
-      booking.secondOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+      booking.secondOtpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+      // do NOT set completedAt or change status to 'completed' or 'active' here.
     }
 
     await booking.save();
 
+    // Load populated booking for return and emit via socket
     const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
 
-    console.log('[verify-payment] done', {
-      bookingId,
-      paidPaise,
-      paidRupees,
-      previousTotal,
-      newTotal: booking.totalPrice,
-      extend: !!extend,
-      generatedOtp: !!generatedOtp
-    });
+    try {
+      if (global.io) {
+        global.io.emit('booking-updated', { booking: populated });
+        if (booking.user) global.io.to(booking.user.toString()).emit('booking-updated', { booking: populated });
+      }
+    } catch (emitErr) {
+      console.warn('[verify-payment] socket emit error', emitErr);
+    }
 
     return res.status(200).json({
       success: true,
@@ -179,7 +158,7 @@ router.post('/verify-payment', protect, async (req, res) => {
       paidAmount: paidRupees,
       previousTotal,
       newTotal: booking.totalPrice,
-      otp: generatedOtp ? { otp: generatedOtp, expiresAt: booking.secondOtpExpires } : null
+      otp: generatedOtp ? { otp: generatedOtp, expiresAt: booking.secondOtpExpires } : null,
     });
   } catch (err) {
     console.error('[verify-payment] error', err);
