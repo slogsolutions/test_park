@@ -40,21 +40,20 @@ router.post('/initiate-payment', protect, async (req, res) => {
     }
 
     // Normalize to integer paise
-    let amountPaise;
-    if (!Number.isInteger(parsed)) {
-      // decimal -> rupees supplied, convert to paise
-      amountPaise = Math.round(parsed * 100);
-    } else {
-      // integer -> ambiguous: choose heuristic:
-      // if < 1000 assume rupees (e.g., 250 => 25000 paise), else assume paise (e.g., 25000)
-      if (parsed < 1000) {
-        amountPaise = parsed * 100;
-      } else {
-        amountPaise = parsed;
-      }
-    }
+    // if (!Number.isInteger(parsed)) {
+    //   // decimal -> rupees supplied, convert to paise
+    //   amountPaise = Math.round(parsed));
+    // } else {
+    //   // integer -> ambiguous: choose heuristic:
+    //   // if < 1000 assume rupees (e.g., 250 => 25000 paise), else assume paise (e.g., 25000)
+    //   if (parsed < 1000) {
+    //     amountPaise = parsed * 100;
+    //   } else {
+    //     amountPaise = parsed;
+    //   }
+    // }
 
-    amountPaise = Math.round(amountPaise);
+    let amountPaise = Math.round(parsed); // always treat as rupees for simplicity
     if (!Number.isInteger(amountPaise) || amountPaise <= 0) {
       return res.status(400).json({ success: false, message: 'Finalized amount invalid; must be positive integer (paise)' });
     }

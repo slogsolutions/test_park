@@ -149,8 +149,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
   const { viewport, setViewport } = useMapContext();
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [searchRadius, setSearchRadius] = useState(5000);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
   const navigate = useNavigate();
 
@@ -164,7 +163,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
 
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
-      const spaces = await parkingService.getNearbySpaces(lat, lng, searchRadius);
+      const spaces = await parkingService.getNearbySpaces(lat, lng);
       setParkingSpaces(spaces);
     } catch (error) {
       toast.error('Failed to fetch parking spaces.');
@@ -200,7 +199,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
     setViewport({ ...viewport, longitude: result.longitude, latitude: result.latitude });
 
     try {
-      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, searchRadius);
+      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude);
       setParkingSpaces(spaces);
       if (spaces.length === 0) {
         toast.info('No nearby parking spaces available at the selected location.');
@@ -320,7 +319,7 @@ const Front: React.FC<LocationSearchBoxProps> = ({ onLocationSelect, onProceed }
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
           >
-            Premium Parking Locations
+            Premium Benefits
           </motion.h2>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 max-w-4xl mx-auto">

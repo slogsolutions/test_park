@@ -61,8 +61,7 @@ export default function App() {
 function HomeOrFront({ user }: { user: any }) {
   const [showHome, setShowHome] = useState(false);
 
-  // still register messaging when user present
-  useFirebaseMessaging(user);
+  // NOTE: moved messaging registration to AppRoutes to ensure it's active on every route.
 
   try {
     if (showHome) {
@@ -86,6 +85,10 @@ function HomeOrFront({ user }: { user: any }) {
 function AppRoutes() {
   const { user } = useAuth(); // 🔹 Get user authentication status from context
   const { role } = useRole();
+
+  // Register FCM messaging globally for the running app (active on all routes)
+  useFirebaseMessaging(user);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />

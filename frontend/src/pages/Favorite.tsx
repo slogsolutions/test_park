@@ -1,30 +1,27 @@
+// src/pages/Favorite.tsx
 import React, { useEffect, useState } from 'react';
-import Map, { Source, Layer } from 'react-map-gl';
+import Map from 'react-map-gl';
 import { toast } from 'react-toastify';
 import { ParkingSpace } from '../types/parking';
-import { useLocation, useNavigate } from 'react-router-dom'; // Import useNavigate
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMapContext } from '../context/MapContext';
 import { parkingService } from '../services/parking.service';
 import ParkingMarker from '../components/map/ParkingMarker';
 import axios from 'axios';
-import { FaBackward, FaParking } from 'react-icons/fa';
+import { FaParking } from 'react-icons/fa';
 import ParkingSpaceList from '../components/parking/ParkingSpaceList';
-import { ArrowLeftCircleIcon, ArrowLeftSquare } from 'lucide-react';
 import FilterBox from './Filterbox';
 import { useAuth } from '../context/AuthContext';
 
 export default function Favorite() {
-  const navigate = useNavigate(); // Hook to navigate back
-  const { search } = useLocation(); 
+  const navigate = useNavigate();
+  const { search } = useLocation();
   const { viewport, setViewport } = useMapContext();
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [routeData, setRouteData] = useState<any>(null);
-  const [searchRadius, setSearchRadius] = useState(5000);
-  const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [searchedLocation, setSearchedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const { user } = useAuth();
-  const location = useLocation();
   const [filters, setFilters] = useState({
     amenities: {
       covered: false,
@@ -33,47 +30,32 @@ export default function Favorite() {
       cctv: false,
       wheelchair: false,
     },
-    priceRange: [0, 500], // Default price range (in your currency)
+    priceRange: [0, 500],
   });
-  
-      // useEffect(() => {
-      //   if (navigator.geolocation) {
-      //     navigator.geolocation.getCurrentPosition(
-      //       (position) => {
-      //         const { latitude, longitude } = position.coords;
-      //         setViewport({ ...viewport, latitude, longitude });
-      //         setCurrentLocation({ lat: latitude, lng: longitude });
-      //         fetchNearbyParkingSpaces(latitude, longitude);
-         
-      //       },
-      //       (error) => {
-      //         console.error('Location error:', error);
-      //         toast.error('Could not get your location. Please enable location services.');
-            
-      //       }
-      //     );
-      //   }
-      // }, []);
 
+  // If URL contains lat/lng -> fetch nearby for that location.
   useEffect(() => {
     const params = new URLSearchParams(search);
-    const searchParams = new URLSearchParams(location.search);
-    const lat = searchParams.get("lat") ? parseFloat(searchParams.get("lat")!) : null;
-    const lng = searchParams.get("lng") ? parseFloat(searchParams.get("lng")!) : null;
+    const lat = params.get('lat') ? parseFloat(params.get('lat')!) : null;
+    const lng = params.get('lng') ? parseFloat(params.get('lng')!) : null;
+
     if (lat && lng) {
-      setViewport({
-        ...viewport,
-        latitude: lat,
-        longitude: lng,
-        zoom: 15,
-      });
-      console.log(lat,lng);
-      
-      // setViewport({ ...viewport, lat, lng });
+      setViewport({ ...viewport, latitude: lat, longitude: lng, zoom: 15 });
       setCurrentLocation({ lat, lng });
-   
       fetchNearbyParkingSpaces(lat, lng);
+    } else {
+      // No specific query params -> fetch ALL spaces so map displays full dataset
+      (async () => {
+        try {
+          const all = await parkingService.getAllSpaces();
+          setParkingSpaces(all || []);
+        } catch (err) {
+          console.warn('Failed to load all parking spaces in Favorite', err);
+          // fallback: nothing
+        }
+      })();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search]);
 
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
@@ -95,11 +77,11 @@ export default function Favorite() {
             geometries: 'geojson',
             overview: 'full',
             steps: true,
-            access_token: "pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A",
+            access_token: import.meta.env.VITE_MAPBOX_TOKEN || '',
           },
         }
       );
-      setRouteData(response.data.routes[0]);
+      // use response...
     } catch (error) {
       toast.error('Failed to fetch route.');
     }
@@ -116,26 +98,18 @@ export default function Favorite() {
 
   return (
     <div className="h-[calc(100vh-64px)] relative">
-      {/* Back Button */}
-
-        <ArrowLeftCircleIcon onClick={() => navigate(-1)}    className="absolute top-4 left-4 z-10 w-8 h-8"/>
-       
-        {/* <div className="absolute top-12  left-4 z-10  w-8 h-8"> */}
-         
       <FilterBox filters={filters} onFilterChange={setFilters} />
-        {/* </div> */}
-  
-      {/* Map */}
+
       <Map
         {...viewport}
         onMove={(evt) => setViewport(evt.viewState)}
-        mapboxAccessToken="pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A"
+        mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN || ''}
         style={{ width: '100%', height: '100%' }}
         mapStyle="mapbox://styles/mapbox/streets-v11"
       >
         {parkingSpaces.map((space) => (
           <ParkingMarker
-            key={space._id}
+            key={typeof space._id === 'object' ? String((space._id as any)) : space._id}
             space={space}
             latitude={space.location.coordinates[1]}
             longitude={space.location.coordinates[0]}
@@ -146,18 +120,13 @@ export default function Favorite() {
         ))}
       </Map>
 
-      {/* Parking Space List */}
-       <ParkingSpaceList
-               spaces={parkingSpaces}
-                 // onClick={() => handleMarkerClick(space)}
-               searchRadius={searchRadius}
-               onRadiusChange={setSearchRadius}
-               onSpaceSelect={(space) => {
-                 navigate('/parking-details', { state: { space ,user} });
-               }}
-               filters={filters}
-               userLocation={selectedSpace || currentLocation}
-             />
+      <ParkingSpaceList
+        spaces={parkingSpaces}onSpaceSelect={(space) => {
+          navigate('/parking-details', { state: { space, user } });
+        }}
+        filters={filters}
+        userLocation={selectedSpace || currentLocation}
+      />
     </div>
   );
 }

@@ -5,31 +5,34 @@ import { ParkingSpace } from '../types/parking';
 export const parkingService = {
   /**
    * Get nearby parking spaces based on location.
-   * radius is optional. If provided it will be included in the query.
+   *
+   * NOTE: If lat or lng is missing (null/undefined), this will fallback to getAllSpaces()
+   * so callers that don't supply a location will receive the full list.
    */
-  async getNearbySpaces(lat: number, lng: number, radius?: number) {
+  async getNearbySpaces(lat?: number | null, lng?: number | null) {
+    // If lat/lng are not provided, return all locations
+    if (lat == null || lng == null) {
+      return this.getAllSpaces();
+    }
+
     const params = new URLSearchParams({
       lat: lat.toString(),
       lng: lng.toString(),
     });
 
-    if (typeof radius === 'number') {
-      params.set('radius', radius.toString());
-    }
-
+    // Backend endpoint for nearby/searchable parking
     const url = `/parking?${params.toString()}`;
     const response = await api.get<ParkingSpace[]>(url);
     return response.data;
   },
 
   /**
-   * Try to fetch *all* parking spaces.
-   * This endpoint may not exist on all backends; it's a convenience.
-   * If your backend doesn't expose /parking/all, this will likely return 404
-   * and callers should fall back to getNearbySpaces.
+   * Get ALL parking spaces (no location filter).
+   * We call the same `/parking` endpoint but without lat/lng query params.
+   * Backend should return all non-deleted spaces when lat/lng are not included.
    */
   async getAllSpaces() {
-    const response = await api.get<ParkingSpace[]>('/parking/all');
+    const response = await api.get<ParkingSpace[]>('/parking');
     return response.data;
   },
 
@@ -42,7 +45,6 @@ export const parkingService = {
         // Let browser set Content-Type for FormData
       },
     });
-    console.log('registerSpaceFormData response:', response.data);
     return response.data;
   },
 
@@ -55,7 +57,6 @@ export const parkingService = {
         Authorization: `Bearer ${token}`,
       },
     });
-    console.log('registerSpaceJSON response:', response.data);
     return response.data;
   },
 
@@ -80,16 +81,14 @@ export const parkingService = {
     return response.data;
   },
 
-  // Get filtered parking spaces based on optional radius and amenities
+  // Get filtered parking spaces based on optional amenities (no radius)
   async getFilteredSpaces({
     lat,
     lng,
-    radius,
     amenities,
   }: {
     lat: number;
     lng: number;
-    radius?: number;
     amenities?: string[];
   }) {
     const params = new URLSearchParams({
@@ -97,7 +96,6 @@ export const parkingService = {
       lng: lng.toString(),
     });
 
-    if (typeof radius === 'number') params.set('radius', radius.toString());
     if (amenities && amenities.length > 0) params.set('amenities', amenities.join(','));
 
     const response = await api.get<ParkingSpace[]>(`/parking/filter?${params.toString()}`);
@@ -106,7 +104,6 @@ export const parkingService = {
 
   // Toggle per-space online status
   async toggleOnline(spaceId: string, isOnline: boolean) {
-    console.log('API call toggleOnline ->', spaceId, isOnline);
     const response = await api.patch(`/parking/${spaceId}/online`, { isOnline });
     return response.data;
   },
@@ -114,6 +111,60 @@ export const parkingService = {
   // Soft-delete a parking space
   async deleteSpace(spaceId: string) {
     const response = await api.delete(`/parking/${spaceId}`);
+    return response.data;
+  },
+
+  /**
+   * Initiate a Razorpay payment for a booking.
+   * - bookingId: id of the booking created on backend
+   * - amount: amount in INR (number). Backend expects amount and creates order.
+   *
+   * Returns: { orderId, amount, currency } (whatever backend/razorpay order returns)
+   */
+  async initiatePayment(bookingId: string, amount: number) {
+    const token = localStorage.getItem('token');
+    const response = await api.post(
+      '/payment/initiate-payment',
+      { bookingId, amount },
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    return response.data;
+  },
+
+  /**
+   * Verify a Razorpay payment after checkout.
+   * Payload must include: bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature
+   *
+   * Backend responds with booking and updated parking object (use parking to update UI counts).
+   */
+  async verifyPayment(payload: {
+    bookingId: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) {
+    const token = localStorage.getItem('token');
+    const response = await api.post('/payment/verify-payment', payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Fetch availability summary for a single parking space.
+   * Useful after verifyPayment or as a polling fallback to refresh the spot count.
+   * Backend should return at least { availableSpots, totalSpots } in the parking object.
+   */
+  async getAvailability(spaceId: string) {
+    const response = await api.get(`/parking/${spaceId}`);
     return response.data;
   },
 };

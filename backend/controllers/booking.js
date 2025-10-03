@@ -15,6 +15,63 @@ const sendNotification = (email, subject, message) => {
 // In-memory timers map (best-effort; not durable across restarts)
 const bookingTimers = new Map();
 
+/**
+ * Helper: safely increment parking.availableSpots by 1, clamped to totalSpots if present.
+ * Emits socket events: 'parking-released' and emits per-user 'booking-completed' if booking provided.
+ */
+const releaseParkingSpot = async (parkingId, booking = null) => {
+  try {
+    if (!parkingId) return null;
+
+    // Use findById then clamp and save for compatibility across Mongo versions.
+    const parking = await ParkingSpace.findById(parkingId);
+    if (!parking) {
+      console.warn(`[releaseParkingSpot] Parking ${parkingId} not found`);
+      return null;
+    }
+
+    const current = typeof parking.availableSpots === 'number' ? parking.availableSpots : 0;
+    const total = typeof parking.totalSpots === 'number' && parking.totalSpots >= 0 ? parking.totalSpots : null;
+
+    let newAvailable = current + 1;
+    if (total !== null) {
+      newAvailable = Math.min(newAvailable, total);
+    }
+
+    if (newAvailable === current) {
+      // no change required
+      return parking;
+    }
+
+    parking.availableSpots = newAvailable;
+    await parking.save();
+
+    // Emit socket events so frontend updates immediately
+    try {
+      const io = global.io;
+      if (io) {
+        io.emit('parking-released', {
+          parkingId: parking._id.toString(),
+          availableSpots: parking.availableSpots
+        });
+
+        if (booking && booking.user) {
+          io.to(booking.user.toString()).emit('booking-completed', { bookingId: booking._id.toString() });
+        }
+      } else {
+        console.log('[releaseParkingSpot] global.io not set; skipping socket emit');
+      }
+    } catch (emitErr) {
+      console.warn('[releaseParkingSpot] socket emit error', emitErr);
+    }
+
+    return parking;
+  } catch (err) {
+    console.error('[releaseParkingSpot] error', err);
+    return null;
+  }
+};
+
 // Mark booking completed helper
 const markBookingCompleted = async (bookingId) => {
   try {
@@ -25,15 +82,29 @@ const markBookingCompleted = async (bookingId) => {
       return;
     }
 
-    // Your current behavior: delete booking when session ends
-    await Booking.findByIdAndDelete(bookingId);
+    // Mark as completed (do not delete) so history is preserved
+    booking.status = 'completed';
+    booking.completedAt = new Date();
 
+    // Ensure endedAt/endTime recorded for consistency (preserve sessionEndAt if present)
+    if (!booking.endedAt) booking.endedAt = booking.sessionEndAt ? booking.sessionEndAt : new Date();
+    if (!booking.endTime) booking.endTime = booking.sessionEndAt ? booking.sessionEndAt : booking.endedAt;
+
+    await booking.save();
+
+    // Clear any in-memory timer
     if (bookingTimers.has(bookingId.toString())) {
       clearTimeout(bookingTimers.get(bookingId.toString()));
       bookingTimers.delete(bookingId.toString());
     }
 
-    console.log(`Booking ${bookingId} auto-deleted as session ended`);
+    // Release the parking spot associated with this booking (if any)
+    if (booking.parkingSpace) {
+      await releaseParkingSpot(booking.parkingSpace, booking);
+      console.log(`Booking ${bookingId} marked completed and parking spot released`);
+    } else {
+      console.log(`Booking ${bookingId} completed but no parkingSpace to release`);
+    }
   } catch (err) {
     console.error('markBookingCompleted error:', err);
   }
@@ -51,11 +122,21 @@ const cleanupOverdueBookings = async () => {
     for (const b of overdue) {
       b.status = 'completed';
       b.completedAt = now;
+      if (!b.endedAt) b.endedAt = now;
       await b.save();
-      console.log(`Cleanup: marked booking ${b._id} completed`);
+
+      // release parking spot
+      try {
+        if (b.parkingSpace) {
+          await releaseParkingSpot(b.parkingSpace, b);
+        }
+      } catch (err) {
+        console.warn('cleanupOverdueBookings: failed releasing parking spot', err);
+      }
+      console.log(`Cleanup: marked booking ${b._id} completed and released parking (if applicable)`);
     }
   } catch (err) {
-    console.error('cleanupOverdueBookings error', err);
+    console.error('cleanupOverdueBookings error:', err);
   }
 };
 
@@ -67,6 +148,9 @@ cleanupOverdueBookings().catch((e) => console.error(e));
 /**
  * Create booking (keeps your existing behavior)
  */
+// ... keep your existing createBooking code unchanged ...
+// I will re-export your existing createBooking implementation as-is so nothing else changes.
+// (Assumes the rest of the function in your file remains exactly the same)
 export const createBooking = async (req, res) => {
   try {
     console.log("req recieved in /createBooking");
@@ -287,11 +371,22 @@ export const updateBookingStatus = async (req, res) => {
     // If booking is manually marked completed, set completedAt
     if (status === 'completed') {
       booking.completedAt = new Date();
+      if (!booking.endedAt) booking.endedAt = booking.completedAt;
+      if (!booking.endTime) booking.endTime = booking.sessionEndAt ? booking.sessionEndAt : booking.completedAt;
+
+      // release parking spot when marking completed manually
+      try {
+        if (booking.parkingSpace) {
+          await releaseParkingSpot(booking.parkingSpace, booking);
+        }
+      } catch (err) {
+        console.warn('Failed to release parking spot on manual complete', err);
+      }
     }
 
     await booking.save();
 
-    // If rejecting or cancelling, free the slot
+    // If rejecting or cancelling, free the slot in availability array (not the summary availableSpots)
     if (['rejected', 'cancelled'].includes(status)) {
       try {
         const startDateMidnight = new Date(booking.startTime);
@@ -324,6 +419,10 @@ export const updateBookingStatus = async (req, res) => {
       } catch (err) {
         console.error('Error freeing parking slot after rejection/cancel:', err);
       }
+
+      // Optionally: also increment availableSpots if the booking was previously occupying a spot
+      // NOTE: If your flow decremented availableSpots only on payment verification, then reject/cancel
+      // for a pending booking that never paid should not change availableSpots. Make sure this matches your flow.
     }
 
     const freshBooking = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
@@ -337,9 +436,6 @@ export const updateBookingStatus = async (req, res) => {
   }
 };
 
-/**
- * Get booking by id (with auth)
- */
 export const getBookingById = async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id)
@@ -351,7 +447,7 @@ export const getBookingById = async (req, res) => {
     }
 
     const parkingSpace = await ParkingSpace.findById(booking.parkingSpace);
-    const isOwner = parkingSpace && parkingSpace.owner && 
+    const isOwner = parkingSpace && parkingSpace.owner &&
                    parkingSpace.owner.toString() === req.user._id.toString();
     const isBuyer = booking.user && booking.user._id.toString() === req.user._id.toString();
 
@@ -479,17 +575,31 @@ export const generateOTP = async (req, res) => {
     return res.status(500).json({ message: 'Failed to generate OTP', error: error.message });
   }
 };
+// safeDecrement.js (or inside booking.js)
+export const decrementParkingAvailable = async (parkingId) => {
+  if (!parkingId) return null;
+  // Atomically decrement but do not go below 0; return updated doc
+  const updated = await ParkingSpace.findOneAndUpdate(
+    { _id: parkingId, $expr: { $gt: ['$availableSpots', 0] } }, // only if > 0
+    { $inc: { availableSpots: -1 } },
+    { new: true }
+  );
 
-/**
- * Verify OTP (provider triggers for starting the session).
- * Backwards-compatible: if booking.otp was used for completion in older flows, verifyOTP will also allow completing when booking.status === 'active'.
- *
- * This function:
- * - Validates provider authorization
- * - Validates OTP presence & expiry against booking.otp
- * - If booking is 'accepted' or 'confirmed' => starts session (status -> active)
- * - If booking is 'active' and booking.otp matches => completes session (status -> completed) [backward compatibility]
- */
+  // If the doc matched, emit socket update for front-end
+  if (updated && global.io) {
+    try {
+      global.io.emit('parking-updated', {
+        parkingId: updated._id.toString(),
+        availableSpots: updated.availableSpots,
+      });
+    } catch (e) {
+      console.warn('socket emit error (parking-updated)', e);
+    }
+  }
+  return updated;
+};
+
+
 export const verifyOTP = async (req, res) => {
   try {
     const bookingId = req.params.id;

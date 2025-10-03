@@ -15,13 +15,13 @@ import { MdLocationOn, MdFilterList, MdGpsFixed, MdSearch, MdMyLocation, MdClose
 import { FaParking, FaMapMarkerAlt, FaShieldAlt, FaBolt, FaWheelchair, FaVideo, FaUmbrella } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import LoadingScreen from './LoadingScreen';
+import { useSocket } from '../context/SocketContext';
 
 export default function Home() {
   const { viewport, setViewport } = useMapContext();
   const { user } = useAuth();
   const navigate = useNavigate();
-
-  // Data + UI state
+  const socket = useSocket();
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [filteredSpaces, setFilteredSpaces] = useState<ParkingSpace[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
@@ -61,52 +61,80 @@ export default function Home() {
     { id: 'wheelchair', label: 'Accessible', icon: FaWheelchair, description: 'Wheelchair accessible' },
   ];
 
-  // ----- Filtering logic (apply only when necessary) -----
+  // ---------- NEW: price meta helper ----------
+  const computePriceMeta = (space: any) => {
+    // prefer priceParking, then pricePerHour, then price
+    const baseRaw = space?.priceParking ?? space?.pricePerHour ?? space?.price ?? 0;
+    const base = Number(baseRaw) || 0;
+    const rawDiscount = space?.discount ?? 0;
+    const discount = Number(rawDiscount);
+    const clamped = Number.isFinite(discount) ? Math.max(0, Math.min(100, discount)) : 0;
+    const discounted = +(base * (1 - clamped / 100)).toFixed(2);
+    return {
+      basePrice: +base.toFixed(2),
+      discountedPrice: discounted,
+      discountPercent: clamped,
+      hasDiscount: clamped > 0 && discounted < base,
+    };
+  };
+  // --------------------------------------------
+
+  // Apply filters whenever parkingSpaces, filters, or searchQuery change
+  // TEMP: bypass all client-side filters for debugging
+useEffect(() => {
+  // directly show everything we got from the API so we can tell
+  // whether the backend returned all spaces.
+  setFilteredSpaces(parkingSpaces);
+}, [parkingSpaces]);
+
   useEffect(() => {
-    if (!Array.isArray(parkingSpaces) || parkingSpaces.length === 0) {
-      setFilteredSpaces([]);
-      return;
-    }
+    if (!socket) return;
 
-    const filtered = parkingSpaces.filter(space => {
-      // If user intentionally typed a query and enabled text filtering, apply searchQuery filter.
-      if (isSearchFilterActive && searchQuery.trim() !== '') {
-        const query = searchQuery.toLowerCase();
-        const matchesTitle = space.title?.toLowerCase().includes(query);
-        const matchesDescription = space.description?.toLowerCase().includes(query);
-        const matchesAddress =
-          space.address?.street?.toLowerCase().includes(query) ||
-          space.address?.city?.toLowerCase().includes(query) ||
-          space.address?.state?.toLowerCase().includes(query);
+    const handleParkingUpdate = (data: any) => {
+      if (!data) return;
+      const parkingId = data.parkingId || data._id || data.id;
+      const availableSpots = typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
+      if (!parkingId || typeof availableSpots !== 'number') return;
 
-        if (!matchesTitle && !matchesDescription && !matchesAddress) {
-          return false;
+      setParkingSpaces((prev) =>
+        prev.map((s: any) => {
+          const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
+          if (sid === String(parkingId)) {
+            return { ...s, availableSpots };
+          }
+          return s;
+        })
+      );
+
+      setFilteredSpaces((prev) =>
+        prev.map((s: any) => {
+          const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
+          if (sid === String(parkingId)) {
+            return { ...s, availableSpots };
+          }
+          return s;
+        })
+      );
+
+      // If the selected space is the one updated, refresh it
+      setSelectedSpace((prev) => {
+        if (!prev) return prev;
+        const sid = prev._id ? (typeof prev._id === 'string' ? prev._id : String(prev._id)) : prev.id;
+        if (sid === String(parkingId)) {
+          return { ...prev, availableSpots };
         }
-      }
+        return prev;
+      });
+    };
 
-      // Price filter - only apply if explicitly activated
-      if (filters.isPriceFilterActive) {
-        const price = (space as any).priceParking ?? (space as any).price ?? 0;
-        const [minPrice, maxPrice] = filters.priceRange;
-        if (price < minPrice || price > maxPrice) return false;
-      }
+    socket.on('parking-updated', handleParkingUpdate);
+    socket.on('parking-released', handleParkingUpdate);
 
-      // Amenity filters
-      const activeAmenityFilters = Object.entries(filters.amenities)
-        .filter(([_, v]) => v)
-        .map(([k]) => k);
-
-      if (activeAmenityFilters.length > 0) {
-        const spaceAmenities = (space.amenities || []).map((a: string) => a.toLowerCase());
-        const hasAll = activeAmenityFilters.every(af => spaceAmenities.some(sa => sa.includes(af.toLowerCase())));
-        if (!hasAll) return false;
-      }
-
-      return true;
-    });
-
-    setFilteredSpaces(filtered);
-  }, [parkingSpaces, filters, searchQuery, isSearchFilterActive]);
+    return () => {
+      socket.off('parking-updated', handleParkingUpdate);
+      socket.off('parking-released', handleParkingUpdate);
+    };
+  }, [socket]);
 
   // Debounced popup close
   const debouncedClosePopup = useCallback(() => {
@@ -247,10 +275,23 @@ export default function Home() {
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
       setLoading(true);
-      const spaces = await parkingService.getNearbySpaces(lat, lng);
-      setParkingSpaces(spaces || []);
-      if (!spaces || spaces.length === 0) {
-        toast.info('No parking spaces found in this area.');
+      const spaces = await parkingService.getAllSpaces();
+
+
+      // Attach computed price meta to each space so list & popup can use it
+      const spacesWithPrice = (spaces || []).map((s: any) => {
+        return { ...s, __price: s.__price ?? computePriceMeta(s) };
+      });
+
+      setParkingSpaces(spacesWithPrice);
+      
+      if (spacesWithPrice && spacesWithPrice.length > 0) {
+        setTimeout(() => {
+          setViewport(prev => ({
+            ...prev,
+            zoom: Math.min(prev.zoom ?? 12, 14)
+          }));
+        }, 500);
       }
     } catch (error) {
       console.error('Failed to fetch parking spaces.', error);
@@ -443,8 +484,20 @@ export default function Home() {
 
     try {
       setLoading(true);
-      await fetchNearbyParkingSpaces(result.latitude, result.longitude);
-      toast.success(`Showing parking near ${result.address.split(',')[0]}`);
+      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, );
+
+      // Attach price meta
+      const spacesWithPrice = (spaces || []).map((s: any) => {
+        return { ...s, __price: s.__price ?? computePriceMeta(s) };
+      });
+
+      setParkingSpaces(spacesWithPrice);
+      
+      if (!spacesWithPrice || spacesWithPrice.length === 0) {
+        toast.info('No parking spaces found in this area. Try increasing the search radius.');
+      } else {
+        toast.success(`Found ${spacesWithPrice.length} parking spaces near ${result.address.split(',')[0]}`);
+      }
     } catch (error) {
       toast.error('Failed to fetch parking spaces for the selected location.');
     } finally {
@@ -803,16 +856,16 @@ export default function Home() {
               <span>Near Me</span>
             </button>
 
-            <div className="flex-1 bg-white/80 backdrop-blur-sm border border-white/30 rounded-xl p-3 flex items-center justify-center text-sm text-gray-600">
-              <span>Results auto-updated by map/search</span>
-            </div>
+            
           </div>
         </div>
 
         <div className="h-full overflow-auto p-3">
           <ParkingSpaceList
             spaces={filteredSpaces}
-            onSpaceSelect={(space) => handleMarkerClick(space)}
+            onSpaceSelect={(space) => {
+              handleMarkerClick(space);
+            }}
             filters={filters}
             userLocation={searchedLocation || currentLocation}
           />
