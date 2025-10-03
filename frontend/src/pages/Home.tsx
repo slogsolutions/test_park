@@ -22,6 +22,7 @@ export default function Home() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const socket = useSocket();
+
   const [parkingSpaces, setParkingSpaces] = useState<ParkingSpace[]>([]);
   const [filteredSpaces, setFilteredSpaces] = useState<ParkingSpace[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
@@ -35,7 +36,7 @@ export default function Home() {
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
-  const [isSearchFilterActive, setIsSearchFilterActive] = useState(false); // <-- NEW: only apply text filter when true
+  const [isSearchFilterActive, setIsSearchFilterActive] = useState(false); // <-- only apply text filter when true
   const [searchResults, setSearchResults] = useState<GeocodingResult[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
 
@@ -61,7 +62,7 @@ export default function Home() {
     { id: 'wheelchair', label: 'Accessible', icon: FaWheelchair, description: 'Wheelchair accessible' },
   ];
 
-  // ---------- NEW: price meta helper ----------
+  // ---------- price meta helper ----------
   const computePriceMeta = (space: any) => {
     // prefer priceParking, then pricePerHour, then price
     const baseRaw = space?.priceParking ?? space?.pricePerHour ?? space?.price ?? 0;
@@ -79,13 +80,17 @@ export default function Home() {
   };
   // --------------------------------------------
 
-  // Apply filters whenever parkingSpaces, filters, or searchQuery change
-  // TEMP: bypass all client-side filters for debugging
-useEffect(() => {
-  // directly show everything we got from the API so we can tell
-  // whether the backend returned all spaces.
-  setFilteredSpaces(parkingSpaces);
-}, [parkingSpaces]);
+  // ---------- only-approve helper ----------
+  const onlyApproved = (spaces: any[] | undefined | null) => {
+    if (!Array.isArray(spaces)) return [];
+    return spaces.filter((s) => String(s?.status || '').toLowerCase() === 'submitted');
+  };
+  // -------------------------------------------------------------
+
+  // Keep filteredSpaces in sync with parkingSpaces (we bypass client-side filters for now)
+  useEffect(() => {
+    setFilteredSpaces(parkingSpaces);
+  }, [parkingSpaces]);
 
   useEffect(() => {
     if (!socket) return;
@@ -93,35 +98,82 @@ useEffect(() => {
     const handleParkingUpdate = (data: any) => {
       if (!data) return;
       const parkingId = data.parkingId || data._id || data.id;
-      const availableSpots = typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
+      const availableSpots =
+        typeof data.availableSpots === 'number' ? data.availableSpots : data.available || data.availableSpots;
       if (!parkingId || typeof availableSpots !== 'number') return;
 
-      setParkingSpaces((prev) =>
-        prev.map((s: any) => {
+      setParkingSpaces((prev) => {
+        const pid = String(parkingId);
+        const foundIdx = prev.findIndex((s: any) => {
           const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
-          if (sid === String(parkingId)) {
-            return { ...s, availableSpots };
-          }
-          return s;
-        })
-      );
+          return sid === pid;
+        });
 
-      setFilteredSpaces((prev) =>
-        prev.map((s: any) => {
+        const incomingStatus = String(data.status || '').toLowerCase();
+
+        // If incoming status exists and is not approved -> remove the space
+        if (incomingStatus && incomingStatus !== 'submitted') {
+          if (foundIdx >= 0) {
+            const copy = [...prev];
+            copy.splice(foundIdx, 1);
+            return copy;
+          }
+          return prev;
+        }
+
+        // Otherwise incoming is approved (or no status given) -> update or append
+        if (foundIdx >= 0) {
+          const copy = [...prev];
+          copy[foundIdx] = { ...copy[foundIdx], ...data, availableSpots };
+          return copy;
+        } else {
+          // only append if approved (or no status provided but prefer to attach only approved)
+          if (data.status && String(data.status).toLowerCase() !== 'submitted') {
+            return prev;
+          }
+          const newSpace = { ...data, __price: data.__price ?? computePriceMeta(data) };
+          return [newSpace, ...prev];
+        }
+      });
+
+      setFilteredSpaces((prev) => {
+        const pid = String(parkingId);
+        const foundIdx = prev.findIndex((s: any) => {
           const sid = s._id ? (typeof s._id === 'string' ? s._id : String(s._id)) : s.id;
-          if (sid === String(parkingId)) {
-            return { ...s, availableSpots };
-          }
-          return s;
-        })
-      );
+          return sid === pid;
+        });
 
-      // If the selected space is the one updated, refresh it
+        const incomingStatus = String(data.status || '').toLowerCase();
+
+        if (incomingStatus && incomingStatus !== 'submitted') {
+          if (foundIdx >= 0) {
+            const copy = [...prev];
+            copy.splice(foundIdx, 1);
+            return copy;
+          }
+          return prev;
+        }
+
+        if (foundIdx >= 0) {
+          const copy = [...prev];
+          copy[foundIdx] = { ...copy[foundIdx], ...data, availableSpots };
+          return copy;
+        } else {
+          if (data.status && String(data.status).toLowerCase() !== 'submitted') return prev;
+          const newSpace = { ...data, __price: data.__price ?? computePriceMeta(data) };
+          return [newSpace, ...prev];
+        }
+      });
+
+      // If selected becomes non-approved, clear it; otherwise update selected
       setSelectedSpace((prev) => {
         if (!prev) return prev;
         const sid = prev._id ? (typeof prev._id === 'string' ? prev._id : String(prev._id)) : prev.id;
         if (sid === String(parkingId)) {
-          return { ...prev, availableSpots };
+          if (data.status && String(data.status).toLowerCase() !== 'submitted') {
+            return null;
+          }
+          return { ...prev, availableSpots, ...data };
         }
         return prev;
       });
@@ -152,7 +204,7 @@ useEffect(() => {
     };
   }, [popupTimeout]);
 
-  // ----- Geolocation & initial load (unchanged behavior) -----
+  // ----- Geolocation & initial load -----
   useEffect(() => {
     const init = async () => {
       try {
@@ -182,7 +234,7 @@ useEffect(() => {
       ...viewport,
       latitude: defaultLat,
       longitude: defaultLng,
-      zoom: 20,
+      zoom: 16,
       pitch: 30,
       bearing: -10,
     });
@@ -205,7 +257,7 @@ useEffect(() => {
             ...viewport,
             latitude,
             longitude,
-            zoom: 20,
+            zoom: 16,
             pitch: 35,
             bearing: -12,
           });
@@ -244,7 +296,7 @@ useEffect(() => {
     });
   };
 
-  // Load default markers
+  // Load default markers (only approved)
   const loadDefaultParkingMarkers = async (lat: number, lng: number) => {
     try {
       setLoading(true);
@@ -252,7 +304,8 @@ useEffect(() => {
         try {
           const all = await (parkingService as any).getAllSpaces();
           if (Array.isArray(all) && all.length > 0) {
-            setParkingSpaces(all);
+            const allowed = onlyApproved(all).map((s) => ({ ...s, __price: s.__price ?? computePriceMeta(s) }));
+            setParkingSpaces(allowed);
             return;
           }
         } catch (err) {
@@ -261,7 +314,8 @@ useEffect(() => {
       }
 
       const spaces = await parkingService.getNearbySpaces(lat, lng);
-      setParkingSpaces(spaces || []);
+      const allowed = onlyApproved(spaces).map((s) => ({ ...s, __price: s.__price ?? computePriceMeta(s) }));
+      setParkingSpaces(allowed || []);
     } catch (err) {
       console.error('Failed to load default parking markers', err);
       setParkingSpaces([]);
@@ -271,25 +325,24 @@ useEffect(() => {
     }
   };
 
-  // Fetch nearby when searching a location explicitly
+  // Fetch nearby when searching or fetching all (only approved)
   const fetchNearbyParkingSpaces = async (lat: number, lng: number) => {
     try {
       setLoading(true);
       const spaces = await parkingService.getAllSpaces();
 
-
-      // Attach computed price meta to each space so list & popup can use it
       const spacesWithPrice = (spaces || []).map((s: any) => {
         return { ...s, __price: s.__price ?? computePriceMeta(s) };
       });
 
-      setParkingSpaces(spacesWithPrice);
-      
-      if (spacesWithPrice && spacesWithPrice.length > 0) {
+      const allowed = onlyApproved(spacesWithPrice);
+      setParkingSpaces(allowed);
+
+      if (allowed && allowed.length > 0) {
         setTimeout(() => {
-          setViewport(prev => ({
+          setViewport((prev) => ({
             ...prev,
-            zoom: Math.min(prev.zoom ?? 12, 14)
+            zoom: Math.min((prev.zoom ?? 9), 11),
           }));
         }, 500);
       }
@@ -304,11 +357,10 @@ useEffect(() => {
   // ----- Handlers -----
   const handleSearchByCurrentLocation = () => {
     if (currentLocation) {
-      // searching by current location should not apply text filter
       setIsSearchFilterActive(false);
       setSearchedLocation(null);
       setSearchQuery('');
-      setViewport({ ...viewport, latitude: currentLocation.lat, longitude: currentLocation.lng, zoom: 20 });
+      setViewport({ ...viewport, latitude: currentLocation.lat, longitude: currentLocation.lng, zoom: 16 });
       loadDefaultParkingMarkers(currentLocation.lat, currentLocation.lng);
       toast.success('Showing parking spaces around you');
     } else {
@@ -324,7 +376,7 @@ useEffect(() => {
       ...prev,
       latitude: space.location.coordinates[1],
       longitude: space.location.coordinates[0],
-      zoom: Math.max(prev.zoom ?? 20, 25),
+      zoom: Math.max(prev.zoom ?? 16, 20),
     }));
 
     if (currentLocation) {
@@ -355,7 +407,7 @@ useEffect(() => {
   };
 
   const handleFilterToggle = (amenity: string) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       amenities: {
         ...prev.amenities,
@@ -365,7 +417,7 @@ useEffect(() => {
   };
 
   const handlePriceRangeChange = (min: number, max: number) => {
-    setFilters(prev => ({
+    setFilters((prev) => ({
       ...prev,
       priceRange: [min, max],
       isPriceFilterActive: true,
@@ -405,7 +457,8 @@ useEffect(() => {
             geometries: 'geojson',
             overview: 'full',
             steps: true,
-            access_token: 'pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A',
+            access_token:
+              'pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A',
           },
         }
       );
@@ -417,7 +470,7 @@ useEffect(() => {
 
   const handleGoToCurrentLocation = () => {
     if (currentLocation) {
-      setViewport({ ...viewport, latitude: currentLocation.lat, longitude: currentLocation.lng, zoom: 20 });
+      setViewport({ ...viewport, latitude: currentLocation.lat, longitude: currentLocation.lng, zoom: 16 });
       loadDefaultParkingMarkers(currentLocation.lat, currentLocation.lng);
     } else {
       toast.info('Current location not available.');
@@ -448,7 +501,8 @@ useEffect(() => {
         `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json`,
         {
           params: {
-            access_token: 'pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A',
+            access_token:
+              'pk.eyJ1IjoicGFya2Vhc2UxIiwiYSI6ImNtNGN1M3pmZzBkdWoya3M4OGFydjgzMzUifQ.wbsW51a7zFMq0yz0SeV6_A',
             limit: 5,
             types: 'place,locality,neighborhood,address',
             proximity: currentLocation ? `${currentLocation.lng},${currentLocation.lat}` : undefined,
@@ -479,24 +533,26 @@ useEffect(() => {
     // show the selected address in the input for UX, but it won't be used as filter
     setSearchQuery(result.address || '');
     setSearchedLocation({ lat: result.latitude, lng: result.longitude });
-    setViewport({ ...viewport, longitude: result.longitude, latitude: result.latitude, zoom: 20 });
+    setViewport({ ...viewport, longitude: result.longitude, latitude: result.latitude, zoom: 16 });
     setShowSearchResults(false);
 
     try {
       setLoading(true);
-      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude, );
+      const spaces = await parkingService.getNearbySpaces(result.latitude, result.longitude);
 
       // Attach price meta
       const spacesWithPrice = (spaces || []).map((s: any) => {
         return { ...s, __price: s.__price ?? computePriceMeta(s) };
       });
 
-      setParkingSpaces(spacesWithPrice);
-      
-      if (!spacesWithPrice || spacesWithPrice.length === 0) {
+      // keep only approved
+      const allowed = onlyApproved(spacesWithPrice);
+      setParkingSpaces(allowed);
+
+      if (!allowed || allowed.length === 0) {
         toast.info('No parking spaces found in this area. Try increasing the search radius.');
       } else {
-        toast.success(`Found ${spacesWithPrice.length} parking spaces near ${result.address.split(',')[0]}`);
+        toast.success(`Found ${allowed.length} parking spaces near ${result.address.split(',')[0]}`);
       }
     } catch (error) {
       toast.error('Failed to fetch parking spaces for the selected location.');
@@ -505,10 +561,7 @@ useEffect(() => {
     }
   };
 
-  const debouncedSearch = useCallback(
-    debounce((query: string) => searchLocations(query), 300),
-    [currentLocation]
-  );
+  const debouncedSearch = useCallback(debounce((query: string) => searchLocations(query), 300), [currentLocation]);
 
   // When user types in input => enable textual filter behavior
   const handleSearchInputChange = async (query: string) => {
@@ -521,7 +574,7 @@ useEffect(() => {
     debouncedSearch(query);
   };
 
-  // ----- Sidebar drag logic (unchanged) -----
+  // ----- Sidebar drag logic -----
   const [sidebarPos, setSidebarPos] = useState({ top: 80, left: 16 });
   const draggingRef = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -618,12 +671,8 @@ useEffect(() => {
                 >
                   <MdLocationOn className="text-blue-500 text-xl flex-shrink-0" />
                   <div className="text-left">
-                    <div className="font-medium text-gray-900 text-sm">
-                      {result.address.split(',')[0]}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {result.address.split(',').slice(1).join(',').trim()}
-                    </div>
+                    <div className="font-medium text-gray-900 text-sm">{result.address.split(',')[0]}</div>
+                    <div className="text-xs text-gray-500 truncate">{result.address.split(',').slice(1).join(',').trim()}</div>
                   </div>
                 </button>
               ))}
@@ -649,7 +698,7 @@ useEffect(() => {
         </button>
       </div>
 
-      {/* Filters Panel (unchanged) */}
+      {/* Filters Panel */}
       {showFilters && (
         <div className="absolute top-28 right-4 z-10 w-80 bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl border border-white/20">
           <div className="p-4 border-b border-gray-100">
@@ -668,10 +717,7 @@ useEffect(() => {
             <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <span>Price Range</span>
               <span className="text-sm bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text font-medium">
-                {filters.isPriceFilterActive
-                  ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr`
-                  : 'Any price'
-                }
+                {filters.isPriceFilterActive ? `₹${filters.priceRange[0]} - ₹${filters.priceRange[1]}/hr` : 'Any price'}
               </span>
             </h4>
             <div className="flex items-center justify-between mb-2 text-sm text-gray-600">
@@ -700,25 +746,17 @@ useEffect(() => {
                     key={amenity.id}
                     onClick={() => handleFilterToggle(amenity.id)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all duration-200 border-2 ${
-                      isActive
-                        ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm'
-                        : 'bg-gray-50 border-transparent hover:bg-gray-100'
+                      isActive ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-blue-200 shadow-sm' : 'bg-gray-50 border-transparent hover:bg-gray-100'
                     }`}
                   >
-                    <div className={`p-2 rounded-lg ${
-                      isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'
-                    }`}>
+                    <div className={`p-2 rounded-lg ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
                       <IconComponent className="text-lg" />
                     </div>
                     <div className="flex-1 text-left">
                       <div className="font-semibold text-gray-800">{amenity.label}</div>
                       <div className="text-xs text-gray-500">{amenity.description}</div>
                     </div>
-                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                      isActive
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500'
-                        : 'bg-white border-gray-300'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${isActive ? 'bg-gradient-to-r from-blue-500 to-purple-500 border-blue-500' : 'bg-white border-gray-300'}`}>
                       {isActive && <span className="text-white text-sm font-bold">✓</span>}
                     </div>
                   </button>
@@ -729,9 +767,7 @@ useEffect(() => {
 
           <div className="p-4 border-t border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50 rounded-b-2xl">
             <div className="text-center">
-              <div className="text-sm font-semibold text-gray-700">
-                Showing {filteredSpaces.length} of {parkingSpaces.length} spaces
-              </div>
+              <div className="text-sm font-semibold text-gray-700">Showing {filteredSpaces.length} of {parkingSpaces.length} spaces</div>
             </div>
           </div>
         </div>
@@ -759,20 +795,13 @@ useEffect(() => {
         >
           {/* Current Location Marker */}
           {currentLocation && (
-            <ParkingMarker
-              latitude={currentLocation.lat}
-              longitude={currentLocation.lng}
-              color="#3b82f6"
-              isCurrentLocation={true}
-              icon={FaMapMarkerAlt}
-            />
+            <ParkingMarker latitude={currentLocation.lat} longitude={currentLocation.lng} color="#3b82f6" isCurrentLocation={true} icon={FaMapMarkerAlt} />
           )}
 
           {/* Parking markers from filteredSpaces */}
           {filteredSpaces.map((space) => {
-            const key = typeof space._id === 'object' && (space._id as any).toString
-              ? (space._id as any).toString()
-              : (space._id as string);
+            const key =
+              typeof space._id === 'object' && (space._id as any).toString ? (space._id as any).toString() : (space._id as string);
             return (
               <ParkingMarker
                 key={key}
@@ -825,21 +854,14 @@ useEffect(() => {
         style={{ top: sidebarPos.top, left: sidebarPos.left, width: 384 }}
         className="absolute z-40 h-[480px] bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden border border-white/20"
       >
-        <div
-          onPointerDown={onPointerDownSidebar}
-          className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white cursor-grab select-none"
-          style={{ touchAction: 'none' }}
-        >
+        <div onPointerDown={onPointerDownSidebar} className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 text-white cursor-grab select-none" style={{ touchAction: 'none' }}>
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold mb-1">Find your perfect parking...</h2>
               <p className="text-blue-100 text-sm opacity-90">Drag this panel anywhere</p>
             </div>
             <div>
-              <button
-                onClick={() => setSidebarPos({ top: 80, left: 16 })}
-                className="bg-white/10 px-3 py-1 rounded-lg text-sm hover:bg-white/20"
-              >
+              <button onClick={() => setSidebarPos({ top: 80, left: 16 })} className="bg-white/10 px-3 py-1 rounded-lg text-sm hover:bg-white/20">
                 Reset
               </button>
             </div>
@@ -855,20 +877,11 @@ useEffect(() => {
               <MdMyLocation className="text-lg" />
               <span>Near Me</span>
             </button>
-
-            
           </div>
         </div>
 
         <div className="h-full overflow-auto p-3">
-          <ParkingSpaceList
-            spaces={filteredSpaces}
-            onSpaceSelect={(space) => {
-              handleMarkerClick(space);
-            }}
-            filters={filters}
-            userLocation={searchedLocation || currentLocation}
-          />
+          <ParkingSpaceList spaces={filteredSpaces} onSpaceSelect={(space) => handleMarkerClick(space)} filters={filters} userLocation={searchedLocation || currentLocation} />
         </div>
       </div>
 
@@ -899,10 +912,7 @@ useEffect(() => {
 }
 
 // Debounce utility
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout;
   return (...args: Parameters<T>) => {
     clearTimeout(timeout);

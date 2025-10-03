@@ -22,6 +22,7 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+<<<<<<< HEAD
 
     // Synchronous guard: if we're already submitting, reuse the in-flight promise.
     if (isSubmittingRef.current) {
@@ -112,6 +113,28 @@ export default function Register() {
       } else {
         console.log('[WEB DEBUG] Register submit finished (Success path cleanup assumed)', { email: formData.email, ts: new Date().toISOString() });
       }
+=======
+    console.log("1.> entered handleSubmit")
+    if (formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }   console.log("2.> setting Loading true")
+    setLoading(true);
+       console.log("3.> entered try")
+    try {
+      await register(formData.name, formData.email, formData.password);
+       console.log("3.> sending data")
+      toast.success('Registration successful! Please check your email for verification.');
+       console.log("4.> usenavidate")
+      navigate('/login', { replace: true });
+    } catch (error: any) {
+         console.log("2a.> Catch")
+      console.error(error);
+      toast.error(error.message || 'Registration failed');
+    } finally {
+       console.log("2c.> FINALLY")
+      setLoading(false);
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
     }
   };
 

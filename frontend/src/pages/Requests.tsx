@@ -47,7 +47,7 @@ const ProviderBookings = () => {
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending'>('all');
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
-  const [otpInput, setOtpInput] = useState<string>('');
+  const [otpInput, setOtpInput] = useState<string>("");
   const [verifyingOtp, setVerifyingOtp] = useState<string | null>(null);
   const [secondOtpInput, setSecondOtpInput] = useState("");
   const [verifyingSecondOtp, setVerifyingSecondOtp] = useState<string | null>(null);
@@ -55,13 +55,16 @@ const ProviderBookings = () => {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/provider-bookings`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_BASE_URL}/api/booking/provider-bookings`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
-        if (!response.ok) throw new Error('Failed to fetch bookings');
+        if (!response.ok) throw new Error("Failed to fetch bookings");
 
         const data = await response.json();
         const list = data.bookings || data;
@@ -129,6 +132,7 @@ const ProviderBookings = () => {
 
   const handleStatusChange = async (bookingId: any, newStatus: any) => {
     try {
+<<<<<<< HEAD
       const token = localStorage.getItem('token');
       const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
         method: 'PUT',
@@ -138,6 +142,20 @@ const ProviderBookings = () => {
         },
         body: JSON.stringify({ status: newStatus }),
       });
+=======
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
 
       if (!response.ok) {
         const error = await response.json();
@@ -150,14 +168,25 @@ const ProviderBookings = () => {
 
       setBookings((prevBookings: any) =>
         prevBookings.map((booking: any) =>
+<<<<<<< HEAD
           booking._id === bookingId ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId } : booking
+=======
+          booking._id === bookingId
+            ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId }
+            : booking
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
         )
       );
 
       alert(`Booking status updated to ${newStatus}.`);
     } catch (err) {
+<<<<<<< HEAD
       console.error('Error updating status:', err);
       alert('Failed to update status.');
+=======
+      console.error("Error updating status:", err);
+      alert("Failed to update status.");
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
     }
   };
 
@@ -180,6 +209,7 @@ const ProviderBookings = () => {
 
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
+<<<<<<< HEAD
       const token = localStorage.getItem('token');
       const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
         method: 'PUT',
@@ -189,6 +219,20 @@ const ProviderBookings = () => {
         },
         body: JSON.stringify({ status: 'rejected', reason }),
       });
+=======
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: "rejected", reason }),
+        }
+      );
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
 
       if (!response.ok) {
         const error = await response.json();
@@ -202,14 +246,19 @@ const ProviderBookings = () => {
           : booking
       ));
     } catch (error) {
+<<<<<<< HEAD
       console.error('Failed to reject booking', error);
       alert('Failed to reject booking.');
+=======
+      console.error("Failed to reject booking", error);
+      alert("Failed to reject booking.");
+>>>>>>> caf97fb66999ba7c2ce15bdbd370a7cd07e0aed7
     }
   };
 
   const verifyOtpForBooking = async (bookingId: string) => {
     if (!otpInput.trim()) {
-      alert('Please enter OTP');
+      alert("Please enter OTP");
       return;
     }
 
@@ -227,7 +276,7 @@ const ProviderBookings = () => {
       
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || 'OTP verification failed');
+        alert(data.message || "OTP verification failed");
         setVerifyingOtp(null);
         return;
       }
@@ -243,8 +292,8 @@ const ProviderBookings = () => {
       setOtpInput('');
       setVerifyingOtp(null);
     } catch (err) {
-      console.error('verify OTP error', err);
-      alert('Error verifying OTP');
+      console.error("verify OTP error", err);
+      alert("Error verifying OTP");
       setVerifyingOtp(null);
     }
   };
@@ -275,46 +324,47 @@ const ProviderBookings = () => {
       }
       
       const returned = data.booking || data;
-      setBookings(prev => prev.map((b: any) => {
-        const stable = b._id || b.id;
-        if (stable === bookingId) {
-          return { ...b, ...(returned || {}), status: 'completed' };
-        }
-        return b;
-      }));
+      setBookings((prev) =>
+        prev.map((b: any) => {
+          const stable = b._id || b.id;
+          if (stable === bookingId) {
+            return { ...b, ...(returned || {}), status: "completed" };
+          }
+          return b;
+        })
+      );
 
       alert("Parking session completed!");
       setSecondOtpInput("");
       setVerifyingSecondOtp(null);
     } catch (err) {
       console.error("verifySecondOtpForBooking error:", err);
-      alert("Failed to verify second OTP");
       setVerifyingSecondOtp(null);
     }
   };
 
   const handleReject = (bookingId: string) => {
-    const booking = bookings.find(b => b._id === bookingId || b.id === bookingId);
+    const booking = bookings.find((b) => b._id === bookingId || b.id === bookingId);
     if (!booking) {
-      alert('Booking not found.');
+      alert("Booking not found.");
       return;
     }
 
     // Use the old filter rule: disallow rejection within 1 hour of start
     if (!canRejectBooking(booking)) {
-      alert('You can only reject a booking earlier than 1 hour before the start time.');
+      alert("You can only reject a booking earlier than 1 hour before the start time.");
       return;
     }
 
     setSelectedBooking(bookingId);
-    setRejectReasons((prev) => ({ ...prev, [bookingId]: '' }));
+    setRejectReasons((prev) => ({ ...prev, [bookingId]: "" }));
   };
 
   const confirmReject = () => {
     if (selectedBooking) {
-      const reason = (rejectReasons[selectedBooking] || '').trim();
+      const reason = (rejectReasons[selectedBooking] || "").trim();
       if (!reason) {
-        alert('Please provide a reason before rejecting.');
+        alert("Please provide a reason before rejecting.");
         return;
       }
       onRejectBooking(selectedBooking, reason);
@@ -329,7 +379,9 @@ const ProviderBookings = () => {
 
   const filterBookings = () => {
     return bookings.filter((booking) => {
-      const name = booking.user?.name ? booking.user.name.toLowerCase() : (booking.customerName || "").toLowerCase();
+      const name = booking.user?.name
+        ? booking.user.name.toLowerCase()
+        : (booking.customerName || "").toLowerCase();
       const service = booking.serviceName ? booking.serviceName.toLowerCase() : "";
       
       const matchesSearch = name.includes(searchTerm.toLowerCase()) || service.includes(searchTerm.toLowerCase());
@@ -403,7 +455,7 @@ const ProviderBookings = () => {
   if (loading) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
-        <LoadingScreen/>
+        <LoadingScreen />
       </div>
     );
   }
