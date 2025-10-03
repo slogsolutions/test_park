@@ -110,81 +110,87 @@ export default function Navbar() {
 
   if (isMobile) {
     return (
+
       <nav className="fixed bottom-0 left-0 w-full bg-white shadow-md border-t border-gray-200 z-50 dark:bg-gray-900 dark:border-gray-800">
-        <div className="flex justify-around py-3">
-          {isAuthenticated ? (
-            <>
-              <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
-                <MdHome className="h-6 w-6 home-icon" />
-              </Link>
+  <div className="flex justify-around py-3 items-center">
+    {isAuthenticated ? (
+      <>
+        {/* Home */}
+        <Link to="/" className={`flex flex-col items-center ${getNavItemClass("/")}`}>
+          <MdHome className="h-6 w-6 home-icon" />
+          <span className="text-xs mt-1 font-medium">Home</span>
+        </Link>
 
-              {/* Show KYC only if not approved */}
-              {shouldShowKYC && (
-                <Link to="/kyc" className={`flex flex-col items-center ${getNavItemClass("/kyc")}`}>
-                  <FileCheck className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">KYC</span>
-                </Link>
-              )}
+        {/* Bookings (buyers only) */}
+        {role === "buyer" && (
+          <Link to="/bookings" className={`flex flex-col items-center ${getNavItemClass("/bookings")}`}>
+            <MdCalendarMonth className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">My Bookings</span>
+          </Link>
+        )}
 
-              {/* Register Space only visible for sellers AFTER KYC is approved */}
-              {!shouldShowKYC && role === "seller" && (
-                <Link
-                  to="/register-parking"
-                  className={`flex flex-col items-center ${getNavItemClass("/register-parking")}`}
-                >
-                  <MdMap className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">Register Space</span>
-                </Link>
-              )}
+        {/* Dashboard (sellers only) */}
+        {role === "seller" && (
+          <Link to="/dashboard" className={`flex flex-col items-center ${getNavItemClass("/dashboard")}`}>
+            <MdDashboard className="h-6 w-6" />
+            <span className="text-xs mt-1 font-medium">Dashboard</span>
+          </Link>
+        )}
 
-              {/* Bookings link - only for buyers */}
-              {role === "buyer" && (
-                <Link to="/bookings" className={`flex flex-col items-center ${getNavItemClass("/bookings")}`}>
-                  <Calendar className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">My Bookings</span>
-                </Link>
-              )}
+        {/* Profile */}
+        <Link to="/profileuser" className={`flex flex-col items-center ${getNavItemClass("/profileuser")}`}>
+          <MdPerson className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">{(user as any)?.name || "Profile"}</span>
+        </Link>
 
-              {role === "seller" && (
-                <Link to="/dashboard" className={`flex flex-col items-center ${getNavItemClass("/dashboard")}`}>
-                  <LayoutDashboard className="h-6 w-6" />
-                  <span className="text-xs mt-1 font-medium">Dashboard</span>
-                </Link>
-              )}
+        {/* Logout */}
+        <button
+          onClick={logout}
+          className="flex flex-col items-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        >
+          <LogOut className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Logout</span>
+        </button>
 
-              <Link to="/profileuser" className={`flex flex-col items-center ${getNavItemClass("/profileuser")}`}>
-                <UserIcon className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">{(user as any)?.name || "Profile"}</span>
-              </Link>
-
-              <button
-                onClick={logout}
-                className="flex flex-col items-center text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-              >
-                <LogOut className="h-6 w-6" />
-                <span className="text-xs mt-1 font-medium">Logout</span>
-              </button>
-
-              <button onClick={toggleRole} className="flex flex-col items-center text-gray-700 dark:text-gray-300">
-                <span className="text-xs mt-1 font-medium">Switch to {role === "buyer" ? "Seller" : "Buyer"}</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <Link to="/login" className={`flex flex-col items-center ${getNavItemClass("/login")}`}>
-                <UserIcon className="h-6 w-6" />
-                <span className="text-xs">Login</span>
-              </Link>
-              <Link
-                to="/register"
-                className="flex flex-col items-center text-white bg-red-600 px-3 py-1 rounded-md hover:bg-red-700"
-              >
-                <span className="text-xs">Register</span>
-              </Link>
-            </>
-          )}
+        {/* Role Toggle */}
+        <div className="flex flex-col items-center ml-2">
+          <label className="inline-flex items-center gap-2 select-none text-xs">
+            <span>{role === "buyer" ? "Buyer" : "Seller"}</span>
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={role === "seller"}
+              onChange={toggleRole}
+              aria-checked={role === "seller"}
+            />
+            <div className={`w-12 h-6 rounded-full relative transition-colors ${role === "seller" ? "bg-red-500" : "bg-green-500"}`}>
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  role === "seller" ? "translate-x-6" : "translate-x-0"
+                }`}
+              />
+            </div>
+          </label>
         </div>
-      </nav>
+      </>
+    ) : (
+      <>
+        <Link to="/login" className={`flex flex-col items-center ${getNavItemClass("/login")}`}>
+          <MdPerson className="h-6 w-6" />
+          <span className="text-xs mt-1 font-medium">Login</span>
+        </Link>
+        <Link
+          to="/register"
+          className="flex flex-col items-center text-white bg-red-600 px-3 py-1 rounded-md hover:bg-red-700"
+        >
+          <span className="text-xs mt-1 font-medium">Register</span>
+        </Link>
+      </>
+    )}
+  </div>
+</nav>
+
+
     );
   }
 
