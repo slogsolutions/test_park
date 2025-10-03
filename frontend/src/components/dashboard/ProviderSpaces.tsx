@@ -82,21 +82,45 @@ const ProviderLocations: React.FC = () => {
     fetchLocations();
   }, []);
 
+  // ✅ Optimistic update with safe server fallback (fixes snap-back)
   const handleToggleOnline = async (id: string, current: boolean) => {
+    const desired = !current;
+
+    // update UI immediately (optimistic)
+    setLocations((prev) =>
+      prev.map((loc) =>
+        loc._id === id ? { ...loc, isOnline: desired } : loc
+      )
+    );
+
     try {
-      const updated = await parkingService.toggleOnline(id, !current);
+      const updated = await parkingService.toggleOnline(id, desired);
+
+      // If server returns a valid boolean for isOnline, use it.
+      // Otherwise keep the optimistic value (desired).
+      const serverValue = updated && typeof updated.isOnline === 'boolean'
+        ? updated.isOnline
+        : desired;
+
       setLocations((prev) =>
         prev.map((loc) =>
-          loc._id === id ? { ...loc, isOnline: updated.isOnline } : loc
+          loc._id === id ? { ...loc, isOnline: serverValue } : loc
         )
       );
     } catch (err) {
       console.error('Failed to toggle online status:', err);
       const msg =
-        err?.response?.data?.message ||
-        err?.message ||
+        (err as any)?.response?.data?.message ||
+        (err as any)?.message ||
         'Could not update online status';
       alert(msg);
+
+      // rollback change if failed
+      setLocations((prev) =>
+        prev.map((loc) =>
+          loc._id === id ? { ...loc, isOnline: current } : loc
+        )
+      );
     }
   };
 

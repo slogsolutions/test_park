@@ -81,10 +81,17 @@ export default function Home() {
   // --------------------------------------------
 
   // ---------- only-approve helper ----------
-  const onlyApproved = (spaces: any[] | undefined | null) => {
-    if (!Array.isArray(spaces)) return [];
-    return spaces.filter((s) => String(s?.status || '').toLowerCase() === 'submitted');
-  };
+  // ---------- only-approve helper ----------
+const onlyApproved = (spaces: any[] | undefined | null) => {
+  if (!Array.isArray(spaces)) return [];
+  return spaces.filter((s) => {
+    const status = String(s?.status || '').toLowerCase();
+    // require explicit isOnline === true (be strict — if missing or false, treat as offline)
+    const online = typeof s?.isOnline !== 'undefined' ? Boolean(s.isOnline) : false;
+    return status === 'submitted' && online;
+  });
+};
+
   // -------------------------------------------------------------
 
   // Keep filteredSpaces in sync with parkingSpaces (we bypass client-side filters for now)
@@ -110,9 +117,10 @@ export default function Home() {
         });
 
         const incomingStatus = String(data.status || '').toLowerCase();
+        const incomingOnline = typeof data.isOnline !== 'undefined' ? Boolean(data.isOnline) : true;
 
-        // If incoming status exists and is not approved -> remove the space
-        if (incomingStatus && incomingStatus !== 'submitted') {
+        // If incoming status exists and is not approved OR the incoming update explicitly marks the space offline -> remove the space
+        if ((incomingStatus && incomingStatus !== 'submitted') || incomingOnline === false) {
           if (foundIdx >= 0) {
             const copy = [...prev];
             copy.splice(foundIdx, 1);
@@ -121,14 +129,14 @@ export default function Home() {
           return prev;
         }
 
-        // Otherwise incoming is approved (or no status given) -> update or append
+        // Otherwise incoming is approved (or no status given) and is online -> update or append
         if (foundIdx >= 0) {
           const copy = [...prev];
           copy[foundIdx] = { ...copy[foundIdx], ...data, availableSpots };
           return copy;
         } else {
-          // only append if approved (or no status provided but prefer to attach only approved)
-          if (data.status && String(data.status).toLowerCase() !== 'submitted') {
+          // only append if approved AND online
+          if ((data.status && String(data.status).toLowerCase() !== 'submitted') || (typeof data.isOnline !== 'undefined' && !data.isOnline)) {
             return prev;
           }
           const newSpace = { ...data, __price: data.__price ?? computePriceMeta(data) };
@@ -144,8 +152,10 @@ export default function Home() {
         });
 
         const incomingStatus = String(data.status || '').toLowerCase();
+        const incomingOnline = typeof data.isOnline !== 'undefined' ? Boolean(data.isOnline) : true;
 
-        if (incomingStatus && incomingStatus !== 'submitted') {
+        // If incoming status exists and is not approved OR incoming explicitly offline -> remove from filtered list
+        if ((incomingStatus && incomingStatus !== 'submitted') || incomingOnline === false) {
           if (foundIdx >= 0) {
             const copy = [...prev];
             copy.splice(foundIdx, 1);
@@ -159,18 +169,18 @@ export default function Home() {
           copy[foundIdx] = { ...copy[foundIdx], ...data, availableSpots };
           return copy;
         } else {
-          if (data.status && String(data.status).toLowerCase() !== 'submitted') return prev;
+          if ((data.status && String(data.status).toLowerCase() !== 'submitted') || (typeof data.isOnline !== 'undefined' && !data.isOnline)) return prev;
           const newSpace = { ...data, __price: data.__price ?? computePriceMeta(data) };
           return [newSpace, ...prev];
         }
       });
 
-      // If selected becomes non-approved, clear it; otherwise update selected
+      // If selected becomes non-approved or offline, clear it; otherwise update selected
       setSelectedSpace((prev) => {
         if (!prev) return prev;
         const sid = prev._id ? (typeof prev._id === 'string' ? prev._id : String(prev._id)) : prev.id;
         if (sid === String(parkingId)) {
-          if (data.status && String(data.status).toLowerCase() !== 'submitted') {
+          if ((data.status && String(data.status).toLowerCase() !== 'submitted') || (typeof data.isOnline !== 'undefined' && !data.isOnline)) {
             return null;
           }
           return { ...prev, availableSpots, ...data };
