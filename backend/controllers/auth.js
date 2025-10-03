@@ -45,19 +45,29 @@ export const register = async (req, res) => {
         // save the user first
     await user.save();
 
-    // attempt to send verification email — but do NOT fail the registration if email sending fails
-    try {
-      await sendVerificationEmail(email, verificationToken);
-    } catch (emailErr) {
-      // log the full error for debugging, but still return success to the client
-      console.error('Warning: verification email failed to send:', emailErr);
-      // optionally store a flag on user to try later, or enqueue a job (not required here)
-    }
+// after: await user.save();
 
-    // respond success regardless of email-sending result (user is created)
-    return res.status(201).json({
-      message: 'Registration successful. Please check your email to verify your account.',
-    });
+const savedUser = await user.save();
+const out = savedUser.toObject ? savedUser.toObject() : savedUser;
+if (out.password) delete out.password;
+
+// create a JWT token if you want to auto-log the user in
+const token = generateToken(savedUser._id);
+
+// attempt to send verification email (your existing try/catch is fine)
+try {
+  await sendVerificationEmail(email, verificationToken);
+} catch (emailErr) {
+  console.error('Warning: verification email failed to send:', emailErr);
+}
+
+// Respond with created user + token + message
+return res.status(201).json({
+  user: out,
+  token,
+  message: 'Registration successful. Please check your email to verify your account.',
+});
+
 
   } catch (error) {
     console.error(error);

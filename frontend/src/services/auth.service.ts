@@ -8,7 +8,8 @@ export const authService = {
 
   async register(name: string, email: string, password: string) {
     const response = await api.post('auth/register', { name, email, password });
-    return response.data;
+return { ...(response.data || {}), status: response.status };
+
   },
 
   async googleLogin(credential: string) {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -16,38 +16,121 @@ export default function Register() {
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
 
+  // Guard to prevent duplicate submission and hold the in-flight promise
+  const isSubmittingRef = useRef(false);
+  const ongoingPromiseRef = useRef<Promise<any> | null>(null);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Synchronous guard: if we're already submitting, reuse the in-flight promise.
+    if (isSubmittingRef.current) {
+      console.warn('[Register] submit ignored: already submitting');
+      if (ongoingPromiseRef.current) {
+        try {
+          await ongoingPromiseRef.current;
+        } catch {
+          /* swallow here - original call will handle errors/toasts */
+        }
+      }
+      return;
+    }
+
+    // local validation
     if (formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match');
       return;
     }
+
+    // mark submitting and set loading UI
+    isSubmittingRef.current = true;
     setLoading(true);
+
+    // create the promise and store it so repeated calls reuse it
+    const submitPromise = (async () => {
+      try {
+        console.log('[WEB DEBUG] Register submit started', { email: formData.email, ts: new Date().toISOString() });
+
+        const res = await register(formData.name, formData.email, formData.password);
+
+        // If backend returned status 201 or user object treat as success
+        if (res?.status === 201 || res?.user) {
+          toast.success('Registration successful! Please check your email for verification.');
+          console.log('[WEB DEBUG] Register resolved success', res);
+          
+          // === FIX: Reset loading state and refs before navigating away ===
+          ongoingPromiseRef.current = null;
+          isSubmittingRef.current = false;
+          setLoading(false);
+          // ===============================================================
+          
+          navigate('/login', { replace: true });
+        } else {
+          // fallback: show server message or generic success message
+          const msg = res?.message || 'Registration completed. Please verify your email.';
+          toast.success(msg);
+          console.log('[WEB DEBUG] Register resolved (no user in response)', res);
+
+          // === FIX: Reset loading state and refs before navigating away ===
+          ongoingPromiseRef.current = null;
+          isSubmittingRef.current = false;
+          setLoading(false);
+          // ===============================================================
+
+          navigate('/login', { replace: true });
+        }
+      } catch (error: any) {
+        // robust extraction of server message
+        console.error('[WEB DEBUG] register failed (caught):', error);
+        const serverMessage =
+          error?.response?.data?.message ||
+          error?.response?.data ||
+          error?.message ||
+          'Registration failed';
+        toast.error(serverMessage);
+        throw error;
+      } finally {
+        // cleanup will be done by the outer finally
+      }
+    })();
+
+    ongoingPromiseRef.current = submitPromise;
+
     try {
-      await register(formData.name, formData.email, formData.password);
-      toast.success('Registration successful! Please check your email for verification.');
-      navigate('/login', { replace: true });
-        } catch (error: any) {
-      // Print helpful debug info — status + server response body (if any)
-      console.error('[WEB DEBUG] register failed:', error);
-      console.error('server response:', error.response?.status, error.response?.data);
-
-      // Show server-provided message if available, otherwise fallback to generic
-      const serverMessage = error.response?.data?.message || error.response?.data || error.message;
-      toast.error(serverMessage || 'Registration failed');
+      await submitPromise;
+    } catch {
+      // already toasted inside; nothing extra needed
     } finally {
-
-      setLoading(false);
+      // This finally block now only serves the error path where navigation did not happen,
+      // as the success path cleans up before navigate().
+      if (isSubmittingRef.current) {
+        // reset guard + UI
+        ongoingPromiseRef.current = null;
+        isSubmittingRef.current = false;
+        setLoading(false);
+        console.log('[WEB DEBUG] Register submit finished (Error path cleanup)', { email: formData.email, ts: new Date().toISOString() });
+      } else {
+        console.log('[WEB DEBUG] Register submit finished (Success path cleanup assumed)', { email: formData.email, ts: new Date().toISOString() });
+      }
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
+      // optional: block google login while a normal registration is in-flight
+      if (isSubmittingRef.current) {
+        toast.info('Please wait until the current request finishes');
+        return;
+      }
+      setLoading(true);
       await googleLogin(credentialResponse.credential);
       toast.success('Google registration successful!');
       navigate('/', { replace: true });
     } catch (error: any) {
-      toast.error(error.message || 'Google registration failed');
+      console.error('[WEB DEBUG] googleLogin failed', error);
+      toast.error(error?.message || 'Google registration failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -206,6 +289,6 @@ export default function Register() {
           </p>
         </div>
       </div>
-    </div>
-  );
+    </div>
+  );
 }
