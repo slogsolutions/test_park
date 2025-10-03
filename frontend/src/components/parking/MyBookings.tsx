@@ -11,7 +11,13 @@ import {
   FaTimesCircle,
   FaCreditCard,
   FaClipboard,
+  FaClock,
+  FaCar,
+  FaParking,
+  FaHistory,
+  FaExclamationTriangle,
 } from "react-icons/fa";
+import { MdTimer, MdPayment, MdDirectionsCar } from "react-icons/md";
 import LoadingScreen from "../../pages/LoadingScreen";
 
 type Booking = {
@@ -39,6 +45,7 @@ const MyBookings: React.FC = () => {
   const [error, setError] = useState("");
   const navigate = useNavigate();
   const socketRef = useRef<any>(null);
+  const [activeTab, setActiveTab] = useState("all");
 
   // store OTPs generated/returned by server keyed by bookingId
   const [generatedOtps, setGeneratedOtps] = useState<Record<string, { otp: string; expiresAt?: string }>>({});
@@ -177,6 +184,23 @@ const MyBookings: React.FC = () => {
     };
   };
 
+  // Format address object to string
+  const formatAddress = (address: any): string => {
+    if (!address) return "Location not specified";
+    if (typeof address === "string") return address;
+    if (typeof address === "object") {
+      const parts = [
+        address.street,
+        address.city,
+        address.state,
+        address.zipCode,
+        address.country
+      ].filter(Boolean);
+      return parts.join(", ") || "Location not specified";
+    }
+    return "Location not specified";
+  };
+
   // allow entering primary OTP 15 minutes before start
   const canEnterOtp = (booking: Booking) => {
     if (!booking.startTime) return false;
@@ -289,12 +313,16 @@ const MyBookings: React.FC = () => {
               { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
             );
 
-            // optimistic local update of endTime while waiting for server emit:
+            // Optimistic: locally update endTime AND set status to active (important per your requirement)
             const originalEndTs = booking.endTime ? new Date(booking.endTime).getTime() : Date.now();
             const newEnd = new Date(originalEndTs + 60 * 60 * 1000);
-            setBookings((prev) => prev.map((b) => (b._id === booking._id ? { ...b, endTime: newEnd.toISOString(), paymentStatus: "paid" } : b)));
+            setBookings((prev) =>
+              prev.map((b) =>
+                b._id === booking._id ? { ...b, endTime: newEnd.toISOString(), paymentStatus: "paid", status: "active" } : b
+              )
+            );
 
-            // server will emit booking-updated with authoritative version; if verifyResp returns updated booking use it
+            // If server returned booking, use that authoritative object (server should set status accordingly)
             if (verifyResp?.data?.booking) {
               const returned = verifyResp.data.booking;
               setBookings((prev) => prev.map((b) => (b._id === returned._id ? returned : b)));
@@ -302,7 +330,7 @@ const MyBookings: React.FC = () => {
 
             alert("Extension payment successful — booking extended by 1 hour.");
 
-            // extension does not generate a checkout (second) OTP. If server returns any OTP, show it.
+            // extension does not usually generate checkout OTP; if server returns OTP show it
             const maybeOtp = verifyResp?.data?.otp;
             if (maybeOtp?.otp) {
               setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: maybeOtp.otp, expiresAt: maybeOtp.expiresAt } }));
@@ -380,8 +408,8 @@ const MyBookings: React.FC = () => {
             if (returnedBooking) {
               setBookings((prev) => prev.map((b) => (b._id === returnedBooking._id ? returnedBooking : b)));
             } else {
-              // If server didn't return booking, just mark paymentStatus=paid (do NOT change endTime)
-              setBookings((prev) => prev.map((b) => (b._id === booking._id ? { ...b, paymentStatus: "paid" } : b)));
+              // If server didn't return booking, mark paymentStatus=paid and set status active (server should have revived it)
+              setBookings((prev) => prev.map((b) => (b._id === booking._id ? { ...b, paymentStatus: "paid", status: "active" } : b)));
             }
 
             if (returnedOtpObj?.otp) {
@@ -448,213 +476,406 @@ const MyBookings: React.FC = () => {
   const statusLabel = (s?: string) => {
     switch (s) {
       case "pending":
-        return { label: "Pending", color: "text-yellow-600", iconGreen: false };
+        return { label: "Pending", color: "text-yellow-600", bgColor: "bg-yellow-100", borderColor: "border-yellow-200", icon: FaClock };
       case "accepted":
-        return { label: "Accepted", color: "text-green-600", iconGreen: true };
+        return { label: "Accepted", color: "text-blue-600", bgColor: "bg-blue-100", borderColor: "border-blue-200", icon: FaCheckCircle };
       case "confirmed":
-        return { label: "Confirmed", color: "text-blue-600", iconGreen: true };
+        return { label: "Confirmed", color: "text-indigo-600", bgColor: "bg-indigo-100", borderColor: "border-indigo-200", icon: FaCheckCircle };
       case "active":
-        return { label: "Active", color: "text-green-600", iconGreen: true };
+        return { label: "Active", color: "text-green-600", bgColor: "bg-green-100", borderColor: "border-green-200", icon: FaCar };
       case "overdue":
-        return { label: "Overdue", color: "text-red-600", iconGreen: false };
+        return { label: "Overdue", color: "text-red-600", bgColor: "bg-red-100", borderColor: "border-red-200", icon: FaExclamationTriangle };
       case "rejected":
-        return { label: "Rejected", color: "text-red-600", iconGreen: false };
+        return { label: "Rejected", color: "text-red-600", bgColor: "bg-red-100", borderColor: "border-red-200", icon: FaTimesCircle };
       case "completed":
-        return { label: "Completed", color: "text-gray-600", iconGreen: true };
+        return { label: "Completed", color: "text-gray-600", bgColor: "bg-gray-100", borderColor: "border-gray-200", icon: FaHistory };
       default:
-        return { label: s ?? "Unknown", color: "text-gray-600", iconGreen: false };
+        return { label: s ?? "Unknown", color: "text-gray-600", bgColor: "bg-gray-100", borderColor: "border-gray-200", icon: FaClock };
     }
   };
 
+  // Filter bookings based on active tab
+  const filteredBookings = bookings.filter(booking => {
+    if (activeTab === "all") return true;
+    if (activeTab === "active") return booking.status === "active";
+    if (activeTab === "upcoming") return ["pending", "accepted", "confirmed"].includes(booking.status || "");
+    if (activeTab === "completed") return booking.status === "completed";
+    if (activeTab === "overdue") return booking.status === "overdue";
+    return true;
+  });
+
   if (loading) {
     return (
-      <div className="h-[calc(100vh-64px)] flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
         <LoadingScreen />
       </div>
     );
   }
   if (error) {
-    return <p>{error}</p>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="text-center p-8 bg-white rounded-3xl shadow-2xl">
+          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error Loading Bookings</h2>
+          <p className="text-gray-600">{error}</p>
+        </div>
+      </div>
+    );
   }
 
   // ---------------- render ----------------
   return (
-    <div className="max-w-4xl mx-auto mb-40 p-6 bg-gradient-to-r shadow-xl rounded-xl">
-      <h2 className="text-3xl font-semibold text-gray-800 mb-6 text-center">Your Bookings</h2>
-      {bookings.length === 0 ? (
-        <p className="text-center text-gray-500">You don't have any bookings.</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {bookings.map((booking) => {
-            const st = statusLabel(booking.status);
-            const now = Date.now();
-            const endTs = booking.endTime ? new Date(booking.endTime).getTime() : NaN;
-            const isActive = booking.status === "active";
-            const beforeEnd = !isNaN(endTs) ? now < endTs : false;
-            const afterOrAtEnd = !isNaN(endTs) ? now >= endTs : false;
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 py-8 px-4">
+      {/* Animated Background Elements */}
+      <div className="fixed top-0 left-0 w-72 h-72 bg-blue-200/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2 animate-pulse" />
+      <div className="fixed bottom-0 right-0 w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl translate-x-1/3 translate-y-1/3 animate-pulse" />
+      
+      <div className="max-w-7xl mx-auto relative z-10">
+        {/* Header Section */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-4 mb-6">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-2xl shadow-2xl">
+              <FaParking className="text-white text-3xl" />
+            </div>
+            <h1 className="text-5xl font-bold bg-gradient-to-r from-slate-800 to-indigo-600 bg-clip-text text-transparent">
+              Your Bookings
+            </h1>
+          </div>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Manage your parking sessions, track active bookings, and view your parking history
+          </p>
+        </div>
 
-            const totals = computeTotalsForBooking(booking);
-            const perHour = totals.perHour;
-            const extensionAmount = Math.ceil(perHour);
-            const generated = generatedOtps[booking._id] ?? (booking.secondOtp ? { otp: booking.secondOtp, expiresAt: booking.secondOtpExpires } : undefined);
-            const payableStatuses = ["pending", "accepted", "confirmed"];
-            const showPayNow = booking.paymentStatus === "pending" && payableStatuses.includes(booking.status);
+        {/* Stats Overview */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-500/10 p-3 rounded-xl">
+                <FaClock className="text-blue-600 text-xl" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">{bookings.filter(b => ["pending", "accepted", "confirmed"].includes(b.status || "")).length}</div>
+                <div className="text-sm text-gray-600">Upcoming</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-green-500/10 p-3 rounded-xl">
+                <FaCar className="text-green-600 text-xl" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">{bookings.filter(b => b.status === "active").length}</div>
+                <div className="text-sm text-gray-600">Active</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-red-500/10 p-3 rounded-xl">
+                <FaExclamationTriangle className="text-red-600 text-xl" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">{bookings.filter(b => b.status === "overdue").length}</div>
+                <div className="text-sm text-gray-600">Overdue</div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="bg-gray-500/10 p-3 rounded-xl">
+                <FaHistory className="text-gray-600 text-xl" />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-gray-800">{bookings.filter(b => b.status === "completed").length}</div>
+                <div className="text-sm text-gray-600">Completed</div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-            const overdueMs = Math.max(0, (isNaN(endTs) ? 0 : now - endTs));
-            const overdueHours = overdueMs > 0 ? Math.ceil(overdueMs / (1000 * 60 * 60)) : 0;
-            const bookingTotalPrice = Number(booking.totalPrice ?? 0);
-            const previewFine = overdueHours > 0 ? overdueHours * 0.5 * (bookingTotalPrice > 0 ? bookingTotalPrice : perHour) : 0;
+        {/* Filter Tabs */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-2 shadow-lg border border-white/20 mb-8">
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: "all", label: "All Bookings", icon: FaHistory },
+              { id: "upcoming", label: "Upcoming", icon: FaClock },
+              { id: "active", label: "Active", icon: FaCar },
+              { id: "overdue", label: "Overdue", icon: FaExclamationTriangle },
+              { id: "completed", label: "Completed", icon: FaCheckCircle }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
+                    activeTab === tab.id
+                      ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg transform scale-105"
+                      : "text-gray-600 hover:bg-gray-100/80 hover:text-gray-800"
+                  }`}
+                >
+                  <Icon className="text-lg" />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-            return (
-              <div key={booking._id} className="p-5 bg-white rounded-lg shadow-lg hover:shadow-xl transition duration-300 ease-in-out transform hover:scale-105">
-                <h3 className="text-lg font-semibold text-gray-800 flex items-center mb-4">
-                  <FaMapMarkerAlt className="mr-2 text-red-500" />
-                  {booking.parkingSpace?.title || "N/A"}
-                </h3>
-                <ul className="text-gray-600 space-y-2">
-                  <li className="flex items-center">
-                    <FaRegCalendarAlt className="mr-2 text-red-500" />
-                    <span>Start Time: </span>
-                    <span className="ml-2">{booking.startTime ? new Date(booking.startTime).toLocaleString() : "N/A"}</span>
-                  </li>
-                  <li className="flex items-center">
-                    <FaRegCalendarAlt className="mr-2 text-red-500" />
-                    <span>End Time: </span>
-                    <span className="ml-2">{booking.endTime ? new Date(booking.endTime).toLocaleString() : "N/A"}</span>
-                  </li>
-                  <li className="flex items-center">
-                    {st.iconGreen ? <FaCheckCircle className={`mr-2 ${st.color}`} /> : <FaTimesCircle className={`mr-2 ${st.color}`} />}
-                    <span>Status: </span>
-                    <span className={`${st.color} font-semibold ml-2`}>{st.label}</span>
-                  </li>
+        {/* Bookings Grid */}
+        {filteredBookings.length === 0 ? (
+          <div className="text-center py-16 bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20">
+            <div className="text-6xl mb-4">🚗</div>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">No bookings found</h3>
+            <p className="text-gray-600">You don't have any {activeTab !== "all" ? activeTab : ""} bookings at the moment.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+            {filteredBookings.map((booking, index) => {
+              const st = statusLabel(booking.status);
+              const StatusIcon = st.icon;
+              const now = Date.now();
+              const endTs = booking.endTime ? new Date(booking.endTime).getTime() : NaN;
+              const isActive = booking.status === "active";
+              const beforeEnd = !isNaN(endTs) ? now < endTs : false;
+              const afterOrAtEnd = !isNaN(endTs) ? now >= endTs : false;
 
-                  <li className="flex items-center">
-                    <FaMoneyBillWave className="mr-2 text-green-600" />
-                    <span>Total Price: </span>
-                    <div className="ml-2">
-                      {totals.hasDiscount ? (
-                        <div className="flex flex-col">
-                          <div className="text-sm text-gray-400 line-through">₹{totals.originalTotal.toFixed(2)}</div>
-                          <div className="text-lg font-bold text-green-700">₹{totals.discountedTotal.toFixed(2)}</div>
-                          <div className="text-xs text-white inline-block mt-1 bg-green-500 px-2 py-0.5 rounded">{totals.discountPercent}% OFF</div>
+              const totals = computeTotalsForBooking(booking);
+              const perHour = totals.perHour;
+              const extensionAmount = Math.ceil(perHour);
+              const generated = generatedOtps[booking._id] ?? (booking.secondOtp ? { otp: booking.secondOtp, expiresAt: booking.secondOtpExpires } : undefined);
+              const payableStatuses = ["pending", "accepted", "confirmed"];
+              const showPayNow = booking.paymentStatus === "pending" && payableStatuses.includes(booking.status);
+
+              const overdueMs = Math.max(0, (isNaN(endTs) ? 0 : now - endTs));
+              const overdueHours = overdueMs > 0 ? Math.ceil(overdueMs / (1000 * 60 * 60)) : 0;
+              const bookingTotalPrice = Number(booking.totalPrice ?? 0);
+              const previewFine = overdueHours > 0 ? overdueHours * 0.5 * (bookingTotalPrice > 0 ? bookingTotalPrice : perHour) : 0;
+
+              // New: showPayFine only when end time has passed and booking not completed
+              const hasEnded = !isNaN(endTs) && now > endTs;
+              const showPayFine = hasEnded && booking.status !== "completed";
+
+              return (
+                <div 
+                  key={booking._id} 
+                  className="group bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl hover:shadow-3xl transition-all duration-500 transform hover:scale-105 border border-white/20 overflow-hidden"
+                  style={{ animationDelay: `${index * 100}ms` }}
+                >
+                  {/* Header with Gradient */}
+                  <div className="bg-gradient-to-r from-blue-500 to-indigo-600 p-6 text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-16 translate-x-16" />
+                    <div className="relative z-10">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold truncate">{booking.parkingSpace?.title || "Parking Space"}</h3>
+                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full ${st.bgColor} ${st.borderColor} border backdrop-blur-sm`}>
+                          <StatusIcon className={`text-sm ${st.color}`} />
+                          <span className={`text-sm font-semibold ${st.color}`}>{st.label}</span>
                         </div>
-                      ) : (
-                        <div className="text-lg font-semibold">₹{totals.originalTotal.toFixed(2)}</div>
-                      )}
+                      </div>
+                      <div className="flex items-center gap-2 text-blue-100">
+                        <FaMapMarkerAlt />
+                        <span className="text-sm">{formatAddress(booking.parkingSpace?.address)}</span>
+                      </div>
                     </div>
-                  </li>
-                </ul>
+                  </div>
 
-                <div className="mt-4 flex flex-col gap-3">
-                  {booking.status === "pending" && (
-                    <button onClick={() => handleCancelBooking(booking._id)} className="bg-red-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-red-600 transition duration-300 transform hover:scale-105">
-                      <FaTimesCircle className="text-xl" />
-                      <span className="ml-2">Cancel</span>
-                    </button>
-                  )}
-
-                  {showPayNow && (
-                    <button onClick={() => handlePayNow(booking._id, totals.discountedTotal)} className="bg-yellow-500 text-white font-semibold py-2 px-4 rounded-lg flex items-center hover:bg-yellow-600 transition duration-300 transform hover:scale-105">
-                      <FaCreditCard className="text-xl" />
-                      <span className="ml-2">Pay Now</span>
-                    </button>
-                  )}
-
-                  {/* Active session flows */}
-                  {isActive && (
-                    <>
-                      {/* before scheduled end: show checkout & track and extend option */}
-                      {beforeEnd && (
-                        <div className="flex flex-col gap-2">
-                          <div className="flex gap-2">
-                            <button onClick={() => handleGenerateOtpForCompletion(booking)} className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex-1 hover:bg-green-700 transition">Check Out</button>
-                            <button onClick={() => handleTrackNow(booking)} className="bg-blue-600 text-white font-semibold py-2 px-3 rounded-lg hover:bg-blue-700 transition">Track</button>
-                          </div>
-
-                          {/* Extend button visible while active (user requested this) */}
-                          <div>
-                            <button onClick={() => handleExtendAndPay(booking)} className="bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-700 transition">Extend & Pay 1 hr — ₹{extensionAmount}</button>
-                          </div>
+                  {/* Booking Details */}
+                  <div className="p-6 space-y-4">
+                    {/* Time Information */}
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 text-gray-700">
+                        <div className="bg-blue-100 p-2 rounded-lg">
+                          <FaRegCalendarAlt className="text-blue-600 text-sm" />
                         </div>
-                      )}
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-500">Start Time</div>
+                          <div className="font-semibold">{booking.startTime ? new Date(booking.startTime).toLocaleString() : "N/A"}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-3 text-gray-700">
+                        <div className="bg-green-100 p-2 rounded-lg">
+                          <MdTimer className="text-green-600 text-sm" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-500">End Time</div>
+                          <div className="font-semibold">{booking.endTime ? new Date(booking.endTime).toLocaleString() : "N/A"}</div>
+                        </div>
+                      </div>
+                    </div>
 
-                      {/* after or at end: if overdueHours>0 => pay fine; else if no overdueHours (rare) show extend */}
-                      {afterOrAtEnd && (
-                        <>
-                          {overdueHours > 0 ? (
-                            <div className="flex flex-col gap-2">
-                              <button disabled className="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg flex-1 cursor-not-allowed" title="Complete is disabled after end time; pay fine to resume session">Check Out Time over</button>
-
-                              <div className="flex gap-2 items-center">
-                                <button onClick={() => handlePayFine(booking)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition flex-1">Pay Fine ₹{previewFine.toFixed(2)}</button>
-                                <div className="text-sm text-gray-500">Overdue: {overdueHours} hr{overdueHours > 1 ? "s" : ""}</div>
+                    {/* Price Information */}
+                    <div className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-2xl p-4 border border-gray-200/50">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="bg-green-100 p-2 rounded-lg">
+                          <FaMoneyBillWave className="text-green-600 text-sm" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-500">Total Price</div>
+                          {totals.hasDiscount ? (
+                            <div className="flex items-center gap-3">
+                              <div className="text-2xl font-bold text-green-700">₹{totals.discountedTotal.toFixed(2)}</div>
+                              <div className="text-sm text-gray-400 line-through">₹{totals.originalTotal.toFixed(2)}</div>
+                              <div className="bg-green-500 text-white text-xs px-2 py-1 rounded-full font-bold">
+                                {totals.discountPercent}% OFF
                               </div>
                             </div>
                           ) : (
-                            <div className="flex gap-2">
-                              <button disabled className="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg flex-1 cursor-not-allowed" title="Complete is disabled after end time; extend and pay to continue session">Check Out Time over</button>
-                              <button onClick={() => handleExtendAndPay(booking)} className="bg-yellow-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-yellow-700 transition">Extend & Pay 1 hr — ₹{extensionAmount}</button>
+                            <div className="text-2xl font-bold text-gray-800">₹{totals.originalTotal.toFixed(2)}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="space-y-3 pt-4">
+                      {booking.status === "pending" && (
+                        <button 
+                          onClick={() => handleCancelBooking(booking._id)} 
+                          className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                        >
+                          <FaTimesCircle className="text-lg" />
+                          Cancel Booking
+                        </button>
+                      )}
+
+                      {showPayNow && (
+                        <button 
+                          onClick={() => handlePayNow(booking._id, totals.discountedTotal)} 
+                          className="w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-yellow-600 hover:to-amber-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                        >
+                          <MdPayment className="text-lg" />
+                          Pay Now - ₹{totals.discountedTotal.toFixed(2)}
+                        </button>
+                      )}
+
+                      {/* Active session flows */}
+                      {isActive && (
+                        <>
+                          {beforeEnd && (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <button 
+                                  onClick={() => handleGenerateOtpForCompletion(booking)} 
+                                  className="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                                >
+                                  Check Out
+                                </button>
+                                <button 
+                                  onClick={() => handleTrackNow(booking)} 
+                                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                                >
+                                  <MdDirectionsCar className="text-lg" />
+                                  Track
+                                </button>
+                              </div>
+
+                              <button 
+                                onClick={() => handleExtendAndPay(booking)} 
+                                className="w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                              >
+                                Extend 1 Hour - ₹{extensionAmount}
+                              </button>
+                            </div>
+                          )}
+
+                          {afterOrAtEnd && (
+                            <div className="space-y-3">
+                              <button disabled className="w-full bg-gray-300 text-gray-700 font-semibold py-3 px-4 rounded-xl cursor-not-allowed flex items-center justify-center gap-2">
+                                Check Out Time Over
+                              </button>
+                              {/* previously there was a duplicate pay fine inside here; removed to avoid duplicates */}
+                              <div className="text-center text-sm text-red-600 font-medium">
+                                {overdueHours > 0 ? `Overdue: ${overdueHours} hr${overdueHours > 1 ? "s" : ""}` : "Time over"}
+                              </div>
+                              { /* If the session has passed, the centralized pay fine button (below) will show */ }
                             </div>
                           )}
                         </>
                       )}
 
-                      {/* show generated/returned OTP for user (if server gave secondOtp after fine or user requested) */}
-                      {generated && (
-                        <div className="mt-2 p-3 bg-gray-50 rounded border">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-xs text-gray-500">Checkout OTP (give to provider)</div>
-                              <div className="font-mono text-lg font-semibold">{generated.otp}</div>
-                              {generated.expiresAt && <div className="text-xs text-gray-500">Expires: {new Date(generated.expiresAt).toLocaleString()}</div>}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <button onClick={() => { navigator.clipboard?.writeText(generated.otp); alert("OTP copied to clipboard"); }} className="px-3 py-1 bg-blue-600 text-white rounded" title="Copy OTP"><FaClipboard /></button>
-                            </div>
+                      {/* Centralized Pay Fine button: only when end time has passed and not completed */}
+                      {showPayFine && (
+                        <div className="space-y-2">
+                          <button 
+                            onClick={() => handlePayFine(booking)} 
+                            className="w-full bg-gradient-to-r from-red-600 to-orange-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-red-700 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 shadow-lg flex items-center justify-center gap-2"
+                          >
+                            Pay Fine - ₹{previewFine.toFixed(2)}
+                          </button>
+                          <div className="text-center text-sm text-red-600 font-medium">
+                            Overdue: {overdueHours} hr{overdueHours > 1 ? "s" : ""}
                           </div>
                         </div>
                       )}
-                    </>
-                  )}
 
-                  {/* If server-marked overdue (not active) show single Pay Fine control (no duplicate) */}
-                  {booking.status === "overdue" && (
-                    <>
-                      <div>
-                        <button onClick={() => handlePayFine(booking)} className="bg-red-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300 transform hover:scale-105">Pay Fine ₹{previewFine.toFixed(2)}</button>
-                        <div className="text-sm text-gray-500 mt-1">Overdue: {overdueHours} hr{overdueHours > 1 ? "s" : ""}</div>
-                      </div>
-
-                      {/* If server already generated a secondOtp (maybe returned on payment verify) show it */}
-                      {generated && (
-                        <div className="mt-2 p-3 bg-gray-50 rounded border">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-xs text-gray-500">Checkout OTP (give to provider)</div>
-                              <div className="font-mono text-lg font-semibold">{generated.otp}</div>
-                              {generated.expiresAt && <div className="text-xs text-gray-500">Expires: {new Date(generated.expiresAt).toLocaleString()}</div>}
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                              <button onClick={() => { navigator.clipboard?.writeText(generated.otp); alert("OTP copied to clipboard"); }} className="px-3 py-1 bg-blue-600 text-white rounded" title="Copy OTP"><FaClipboard /></button>
-                            </div>
-                          </div>
-                        </div>
+                      {/* Track button for paid bookings */}
+                      {booking.paymentStatus === "paid" && booking.status !== "completed" && !isActive && (
+                        <button 
+                          onClick={() => handleTrackNow(booking)} 
+                          className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
+                        >
+                          <MdDirectionsCar className="text-lg" />
+                          Track Now
+                        </button>
                       )}
-                    </>
-                  )}
-
-                  {/* When paid but not completed and not active (e.g. confirmed/accepted paid) allow Track */}
-                  {booking.paymentStatus === "paid" && booking.status !== "completed" && !isActive && (
-                    <div>
-                      <button onClick={() => handleTrackNow(booking)} className="bg-green-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-green-600 transition duration-300 transform hover:scale-105">Track Now</button>
                     </div>
-                  )}
+
+                    {/* OTP Display */}
+                    {generated && (
+                      <div className="mt-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl border border-indigo-200/60 shadow-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="text-xs font-semibold text-indigo-600/80 mb-2 uppercase tracking-wide">Checkout OTP</div>
+                            <div className="text-2xl font-mono font-bold tracking-widest bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                              {generated.otp}
+                            </div>
+                            {generated.expiresAt && (
+                              <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                                <MdTimer className="text-amber-500" />
+                                Expires: {new Date(generated.expiresAt).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+                          <button 
+                            onClick={() => { navigator.clipboard?.writeText(generated.otp); alert("OTP copied to clipboard"); }} 
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-3 rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-110 shadow-lg"
+                            title="Copy OTP"
+                          >
+                            <FaClipboard />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Add custom animations */}
+      <style>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };
