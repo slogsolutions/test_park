@@ -2,6 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
  // use your auth middleware
 import { updateProfile } from '../controllers/auth.js';
+import { sendPhoneOtp, verifyPhoneOtp } from '../controllers/auth.js';
 import {
   register,
   login,
@@ -47,5 +48,7 @@ router.post('/resend-verification', resendVerification);
 router.patch('/online', protect, setOnlineStatus);
 router.patch('/me', protect, updateProfile);
 router.patch('/me', protect, updateProfile);
+router.post('/send-phone-otp', protect, sendPhoneOtp);
+router.post('/verify-phone-otp', protect, verifyPhoneOtp);
 
 export default router;

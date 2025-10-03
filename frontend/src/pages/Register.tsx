@@ -27,10 +27,16 @@ export default function Register() {
       await register(formData.name, formData.email, formData.password);
       toast.success('Registration successful! Please check your email for verification.');
       navigate('/login', { replace: true });
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Registration failed');
+        } catch (error: any) {
+      // Print helpful debug info — status + server response body (if any)
+      console.error('[WEB DEBUG] register failed:', error);
+      console.error('server response:', error.response?.status, error.response?.data);
+
+      // Show server-provided message if available, otherwise fallback to generic
+      const serverMessage = error.response?.data?.message || error.response?.data || error.message;
+      toast.error(serverMessage || 'Registration failed');
     } finally {
+
       setLoading(false);
     }
   };

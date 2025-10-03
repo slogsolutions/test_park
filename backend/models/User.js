@@ -13,6 +13,14 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
   },
+  phone: {
+    type: String,
+    default: null,
+  },
+  phoneVerified: {
+    type: Boolean,
+    default: false,
+  },
   onlineStatus: {
    type: Boolean,
    default: false,

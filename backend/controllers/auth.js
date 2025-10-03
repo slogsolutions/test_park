@@ -5,8 +5,13 @@ import { OAuth2Client } from 'google-auth-library';
 import crypto from 'crypto';
 import User from '../models/User.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
+import Twilio from 'twilio';
+
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const twilioClient = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const TWILIO_VERIFY_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
+
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -37,15 +42,85 @@ export const register = async (req, res) => {
       verificationExpire: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
     });
 
+        // save the user first
     await user.save();
-    await sendVerificationEmail(email, verificationToken);
 
-    res.status(201).json({
+    // attempt to send verification email — but do NOT fail the registration if email sending fails
+    try {
+      await sendVerificationEmail(email, verificationToken);
+    } catch (emailErr) {
+      // log the full error for debugging, but still return success to the client
+      console.error('Warning: verification email failed to send:', emailErr);
+      // optionally store a flag on user to try later, or enqueue a job (not required here)
+    }
+
+    // respond success regardless of email-sending result (user is created)
+    return res.status(201).json({
       message: 'Registration successful. Please check your email to verify your account.',
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+// POST /api/auth/send-phone-otp
+export const sendPhoneOtp = async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ message: 'Phone is required' });
+
+    // Start verification via Twilio Verify
+    const verification = await twilioClient.verify
+      .services(TWILIO_VERIFY_SID)
+      .verifications.create({
+        to: phone,
+        channel: 'sms',
+      });
+
+    if (verification.status === 'pending' || verification.status === 'sent') {
+      return res.json({ message: 'OTP sent' });
+    }
+    return res.status(500).json({ message: 'Could not send OTP' });
+  } catch (error) {
+    console.error('sendPhoneOtp error', error);
+    return res.status(500).json({ message: 'Failed to send OTP' });
+  }
+};
+
+// POST /api/auth/verify-phone-otp
+export const verifyPhoneOtp = async (req, res) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) return res.status(400).json({ message: 'Phone and code required' });
+
+    const verificationCheck = await twilioClient.verify
+      .services(TWILIO_VERIFY_SID)
+      .verificationChecks.create({
+        to: phone,
+        code: code,
+      });
+
+    if (verificationCheck.status === 'approved') {
+      // find authenticated user (requires protect middleware in route)
+      const userId = req.user && req.user.id;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      const user = await User.findById(userId);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+
+      user.phone = phone;
+      user.phoneVerified = true;
+      await user.save();
+
+      return res.json({ message: 'Phone verified', phone: user.phone });
+    } else {
+      return res.status(400).json({ message: 'Invalid code' });
+    }
+  } catch (error) {
+    console.error('verifyPhoneOtp error', error);
+    return res.status(500).json({ message: 'Failed to verify OTP' });
   }
 };
 
