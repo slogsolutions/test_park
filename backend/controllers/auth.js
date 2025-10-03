@@ -14,42 +14,99 @@ const generateToken = (id) => {
   });
 };
 
+// export const register = async (req, res) => {
+//   const errors = validationResult(req);
+//   if (!errors.isEmpty()) {
+//     console.log("Validation errors:", errors.array());
+//     return res.status(400).json({ errors: errors.array() });
+//   }
+
+//   try {
+//     const { name, email, password } = req.body;
+//     console.log("Registering user:", email);
+
+//     let user = await User.findOne({ email });
+//     if (user) {
+//       console.log("User already exists:", email);
+//       return res.status(400).json({ message: 'User already exists' });
+//     }
+
+//     const verificationToken = crypto.randomBytes(20).toString('hex');
+
+//     user = new User({
+//       name,
+//       email,
+//       password,
+//       verificationToken,
+//       verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
+//     });
+
+//     await user.save();
+//     console.log("User saved:", user._id);
+
+//     await sendVerificationEmail(email, verificationToken);
+//     console.log("Verification email sent to:", email);
+
+//     res.status(201).json({
+//       message: 'Registration successful. Please check your email to verify your account.',
+//     });
+//   } catch (error) {
+//     console.error("Registration error:", error);
+//     res.status(500).json({ message: 'Server error' });
+//   }
+// };
+
+
+// set online status for the authenticated user
+
 export const register = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log("Validation errors:", errors.array());
     return res.status(400).json({ errors: errors.array() });
   }
 
   try {
     const { name, email, password } = req.body;
-    let user = await User.findOne({ email });
+    console.log("Registering user:", email);
 
+    let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
     const verificationToken = crypto.randomBytes(20).toString('hex');
+
     user = new User({
       name,
       email,
       password,
       verificationToken,
-      verificationExpire: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+      verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
     });
 
     await user.save();
-    await sendVerificationEmail(email, verificationToken);
+    console.log("User saved:", user._id);
+
+    try {
+      await sendVerificationEmail(email, verificationToken);
+      console.log("Verification email sent to:", email);
+    } catch (emailErr) {
+      console.error("Email sending failed:", emailErr);
+      return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
+    }
 
     res.status(201).json({
       message: 'Registration successful. Please check your email to verify your account.',
     });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Registration error:", error);
+    res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 };
 
-// set online status for the authenticated user
+
+
 export const setOnlineStatus = async (req, res) => {
   try {
     // expect { online: true/false } in request body
