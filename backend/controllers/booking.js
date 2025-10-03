@@ -148,9 +148,6 @@ cleanupOverdueBookings().catch((e) => console.error(e));
 /**
  * Create booking (keeps your existing behavior)
  */
-// ... keep your existing createBooking code unchanged ...
-// I will re-export your existing createBooking implementation as-is so nothing else changes.
-// (Assumes the rest of the function in your file remains exactly the same)
 export const createBooking = async (req, res) => {
   try {
     console.log("req recieved in /createBooking");
@@ -164,13 +161,26 @@ export const createBooking = async (req, res) => {
 
     const { pricePerHour, availability, owner: providerId } = parkingSpace;
 
+    // Basic presence checks — keep the same behavior but we will parse dates below
     if (!startTime || !endTime || !pricePerHour) {
       return res.status(400).json({ message: "Invalid data for price calculation" });
     }
 
-    // check availability
-    const requestedStart = new Date(startTime);
-    const requestedEnd = new Date(endTime);
+    // Parse incoming times to Date objects (normalize)
+    const parsedStart = new Date(startTime);
+    const parsedEnd = new Date(endTime);
+
+    if (isNaN(parsedStart.getTime()) || isNaN(parsedEnd.getTime())) {
+      return res.status(400).json({ message: 'Invalid startTime or endTime' });
+    }
+
+    if (parsedEnd.getTime() <= parsedStart.getTime()) {
+      return res.status(400).json({ message: 'endTime must be after startTime' });
+    }
+
+    // check availability using parsed Date objects
+    const requestedStart = parsedStart;
+    const requestedEnd = parsedEnd;
     const isSlotBooked = (availability || []).some(dateObj => {
       return (dateObj.slots || []).some(slot => {
         const slotStart = new Date(slot.startTime);
@@ -187,16 +197,15 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: 'Selected time slot is already booked' });
     }
 
-    // calculate total price
-    const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
-    const totalPrice = durationHours * pricePerHour;
+    // keep totalPrice default (per your request) — don't compute here, set 0
+    const totalPrice = 0;
 
     // create booking: auto-accept and assign providerId so buyer can pay immediately
     const booking = new Booking({
       user: req.user._id,
       parkingSpace: parkingSpaceId,
-      startTime,
-      endTime,
+      startTime: parsedStart, // store Date object (normalized)
+      endTime: parsedEnd,     // store Date object (normalized)
       totalPrice,
       pricePerHour,
       vehicleNumber,
@@ -213,7 +222,7 @@ export const createBooking = async (req, res) => {
 
     // mark availability slot as booked (best-effort)
     try {
-      const startDateMidnight = new Date(startTime);
+      const startDateMidnight = new Date(parsedStart);
       startDateMidnight.setHours(0, 0, 0, 0);
 
       await ParkingSpace.findByIdAndUpdate(
@@ -224,7 +233,7 @@ export const createBooking = async (req, res) => {
         {
           arrayFilters: [
             { 'dateElem.date': { $eq: startDateMidnight } },
-            { 'slotElem.startTime': new Date(startTime), 'slotElem.endTime': new Date(endTime) }
+            { 'slotElem.startTime': parsedStart, 'slotElem.endTime': parsedEnd }
           ],
           new: true
         }
@@ -242,10 +251,10 @@ export const createBooking = async (req, res) => {
 
     const bookingDeepLink = `myapp://booking/${booking._id}`;
     const userTitle = 'Booking Confirmed';
-    const userBody = `Your booking (${booking._id}) is confirmed for ${new Date(startTime).toLocaleString()}.`;
+    const userBody = `Your booking (${booking._id}) is confirmed for ${new Date(parsedStart).toLocaleString()}.`;
 
     const providerTitle = 'New Booking Received';
-    const providerBody = `You have a new booking for your space (${parkingSpace.title || parkingSpaceId}) on ${new Date(startTime).toLocaleString()}.`;
+    const providerBody = `You have a new booking for your space (${parkingSpace.title || parkingSpaceId}) on ${new Date(parsedStart).toLocaleString()}.`;
 
     // Send to booking user
     (async () => {
@@ -785,7 +794,7 @@ export const verifySecondOtp = async (req, res) => {
 
     return res.status(200).json({ message: 'Second OTP verified and booking completed', booking: populated });
   } catch (err) {
-    console.error('verifySecondOtp error', err);
+    console.error('verifySecondOtp error:', err);
     return res.status(500).json({ message: 'Failed to verify second OTP', error: err.message });
   }
 };

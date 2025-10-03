@@ -410,6 +410,15 @@ const ProviderBookings = () => {
                         <Clock className="inline-block w-4 h-4 mr-2" />
                         {booking.startTime ? new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                       </p>
+
+                       <p className="text-sm text-gray-500">
+                        <Calendar className="inline-block w-4 h-4 mr-2" />
+                        {booking.endTime ? new Date(booking.endTime).toLocaleDateString() : 'N/A'}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        <Clock className="inline-block w-4 h-4 mr-2" />
+                        {booking.endTime ? new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                      </p>
                     </div>
                   </div>
                   <div className="text-right">
