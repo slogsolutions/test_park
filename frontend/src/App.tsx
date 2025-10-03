@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { RoleProvider, useRole } from "./context/RoleContext";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -36,8 +36,8 @@ import Profile from "./pages/Profile";
 import { buyerRoutes } from "./routes/BuyerRoutes";
 import { sellerRoutes } from "./routes/SellerRoutes";
 import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
-import { useState } from "react";
 import EditProfile from './pages/EditProfile';
+import PhoneVerifyModal from "./components/PhoneVerifyModal"; // 🔹 Added
 
 export default function App() {
 
@@ -85,9 +85,17 @@ function HomeOrFront({ user }: { user: any }) {
 function AppRoutes() {
   const { user } = useAuth(); // 🔹 Get user authentication status from context
   const { role } = useRole();
+  const [showPhoneModal, setShowPhoneModal] = useState(false); // 🔹 Added
 
   // Register FCM messaging globally for the running app (active on all routes)
   useFirebaseMessaging(user);
+
+  // 🔹 Open phone verification modal if user exists but not verified
+  useEffect(() => {
+    if (user && !user.phoneVerified) {
+      setShowPhoneModal(true);
+    }
+  }, [user]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -123,6 +131,8 @@ function AppRoutes() {
         {user && role === "seller" && sellerRoutes}
       </Routes>
       <ToastContainer position="top-right" />
+      {/* 🔹 Phone verification modal */}
+      {showPhoneModal && <PhoneVerifyModal open={showPhoneModal} onClose={() => setShowPhoneModal(false)} />}
     </div>
   );
 }

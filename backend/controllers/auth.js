@@ -181,18 +181,11 @@ export const sendPhoneOtp = async (req, res) => {
     const { phone } = req.body;
     if (!phone) return res.status(400).json({ message: 'Phone is required' });
 
-    // Start verification via Twilio Verify
     const verification = await twilioClient.verify
       .services(TWILIO_VERIFY_SID)
-      .verifications.create({
-        to: phone,
-        channel: 'sms',
-      });
+      .verifications.create({ to: phone, channel: 'sms' });
 
-    if (verification.status === 'pending' || verification.status === 'sent') {
-      return res.json({ message: 'OTP sent' });
-    }
-    return res.status(500).json({ message: 'Could not send OTP' });
+    return res.json({ message: 'OTP sent', status: verification.status });
   } catch (error) {
     console.error('sendPhoneOtp error', error);
     return res.status(500).json({ message: 'Failed to send OTP' });
@@ -207,17 +200,12 @@ export const verifyPhoneOtp = async (req, res) => {
 
     const verificationCheck = await twilioClient.verify
       .services(TWILIO_VERIFY_SID)
-      .verificationChecks.create({
-        to: phone,
-        code: code,
-      });
+      .verificationChecks.create({ to: phone, code });
 
     if (verificationCheck.status === 'approved') {
-      // find authenticated user (requires protect middleware in route)
       const userId = req.user && req.user.id;
-      if (!userId) {
-        return res.status(401).json({ message: 'Not authenticated' });
-      }
+      if (!userId) return res.status(401).json({ message: 'Not authenticated' });
+
       const user = await User.findById(userId);
       if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -225,16 +213,14 @@ export const verifyPhoneOtp = async (req, res) => {
       user.phoneVerified = true;
       await user.save();
 
-      return res.json({ message: 'Phone verified', phone: user.phone });
-    } else {
-      return res.status(400).json({ message: 'Invalid code' });
+      return res.json({ message: 'Phone verified', phone: user.phone, phoneVerified: true });
     }
+    return res.status(400).json({ message: 'Invalid code' });
   } catch (error) {
     console.error('verifyPhoneOtp error', error);
     return res.status(500).json({ message: 'Failed to verify OTP' });
   }
 };
-
 
 
 export const setOnlineStatus = async (req, res) => {
