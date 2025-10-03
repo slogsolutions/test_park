@@ -1,5 +1,5 @@
 // frontend/src/pages/Requests.tsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   Calendar,
   Clock,
@@ -7,10 +7,10 @@ import {
   XCircle,
   Clock3,
   CalendarDays,
-  Key
-} from 'lucide-react';
-import { motion } from 'framer-motion';
-import LoadingScreen from './LoadingScreen';
+  Key,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import LoadingScreen from "./LoadingScreen";
 
 interface Booking {
   _id?: string;
@@ -19,7 +19,14 @@ interface Booking {
   serviceName?: string;
   startTime?: string;
   price?: number;
-  status?: 'pending' | 'accepted' | 'rejected' | 'confirmed' | 'completed' | 'cancelled' | 'active';
+  status?:
+    | "pending"
+    | "accepted"
+    | "rejected"
+    | "confirmed"
+    | "completed"
+    | "cancelled"
+    | "active";
   user?: { name: string };
   totalPrice?: number;
   paymentStatus?: string;
@@ -33,26 +40,37 @@ interface Booking {
 const ProviderBookings = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'accepted' | 'active' | 'rejected' | 'confirmed' | 'completed'>('all');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    | "all"
+    | "pending"
+    | "accepted"
+    | "active"
+    | "rejected"
+    | "confirmed"
+    | "completed"
+  >("all");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all");
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
-  const [otpInput, setOtpInput] = useState<string>('');
+  const [otpInput, setOtpInput] = useState<string>("");
   const [verifyingOtp, setVerifyingOtp] = useState<string | null>(null);
-  const [secondOtpInput, setSecondOtpInput] = useState('');
+  const [secondOtpInput, setSecondOtpInput] = useState("");
   const [verifyingSecondOtp, setVerifyingSecondOtp] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/provider-bookings`, {
-          method: 'GET',
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const token = localStorage.getItem("token");
+        const response = await fetch(
+          `${import.meta.env.VITE_BASE_URL}/api/booking/provider-bookings`,
+          {
+            method: "GET",
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
 
-        if (!response.ok) throw new Error('Failed to fetch bookings');
+        if (!response.ok) throw new Error("Failed to fetch bookings");
 
         const data = await response.json();
         setBookings(data || []);
@@ -66,17 +84,46 @@ const ProviderBookings = () => {
     fetchBookings();
   }, []);
 
+  // Helper: Only allow cancellation if current time is earlier than 24 hours before start
+  const canCancelBooking = (booking: Booking) => {
+    if (!booking.startTime) return false;
+    const startTs = new Date(booking.startTime).getTime();
+    if (isNaN(startTs)) return false;
+    const now = Date.now();
+    const twentyFourHoursBefore = startTs - 24 * 60 * 60 * 1000;
+    return now < twentyFourHoursBefore;
+  };
+
+  // Cancel booking handler
+  const handleCancelBooking = (bookingId: string) => {
+    const booking = bookings.find((b) => b._id === bookingId || b.id === bookingId);
+    if (!booking) {
+      alert("Booking not found");
+      return;
+    }
+
+    if (!canCancelBooking(booking)) {
+      alert("Cannot cancel this booking online. Please contact customer care.");
+      return;
+    }
+
+    handleStatusChange(bookingId, "cancelled");
+  };
+
   const handleStatusChange = async (bookingId: any, newStatus: any) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
-      });
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -89,28 +136,33 @@ const ProviderBookings = () => {
 
       setBookings((prevBookings: any) =>
         prevBookings.map((booking: any) =>
-          booking._id === bookingId ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId } : booking
+          booking._id === bookingId
+            ? { ...booking, status: newStatus, providerId: updatedBooking?.providerId || booking.providerId }
+            : booking
         )
       );
 
       alert(`Booking status updated to ${newStatus}.`);
     } catch (err) {
-      console.error('Error updating status:', err);
-      alert('Failed to update status.');
+      console.error("Error updating status:", err);
+      alert("Failed to update status.");
     }
   };
 
   const onRejectBooking = async (bookingId: string, reason: string) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ status: 'rejected', reason }),
-      });
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: "rejected", reason }),
+        }
+      );
 
       if (!response.ok) {
         const error = await response.json();
@@ -118,18 +170,19 @@ const ProviderBookings = () => {
         return;
       }
 
-      setBookings(prev => prev.map(booking =>
-        (booking._id === bookingId || booking.id === bookingId)
-          ? { ...booking, status: 'rejected' }
-          : booking
-      ));
+      setBookings((prev) =>
+        prev.map((booking) =>
+          booking._id === bookingId || booking.id === bookingId
+            ? { ...booking, status: "rejected" }
+            : booking
+        )
+      );
     } catch (error) {
-      console.error('Failed to reject booking', error);
-      alert('Failed to reject booking.');
+      console.error("Failed to reject booking", error);
+      alert("Failed to reject booking.");
     }
   };
 
-  // helper: return true if current time is earlier than (startTime - 1 hour)
   const canRejectBooking = (booking: Booking) => {
     if (!booking.startTime) return true;
     const startTs = new Date(booking.startTime).getTime();
@@ -138,7 +191,6 @@ const ProviderBookings = () => {
     return Date.now() < oneHourBefore;
   };
 
-  // helper: return true if current time is >= booking startTime (OTP entry allowed only after start for buyer)
   const canEnterOtp = (booking: Booking) => {
     if (!booking.startTime) return false;
     const startTs = new Date(booking.startTime).getTime();
@@ -146,70 +198,70 @@ const ProviderBookings = () => {
     return Date.now() >= startTs;
   };
 
-  // friendly countdown text until start
   const timeUntilStartText = (booking: Booking) => {
-    if (!booking.startTime) return 'Start time not specified';
+    if (!booking.startTime) return "Start time not specified";
     const startTs = new Date(booking.startTime).getTime();
-    if (isNaN(startTs)) return 'Start time invalid';
+    if (isNaN(startTs)) return "Start time invalid";
     const diff = startTs - Date.now();
-    if (diff <= 0) return 'Starting now';
+    if (diff <= 0) return "Starting now";
     const mins = Math.ceil(diff / (60 * 1000));
-    if (mins < 60) return `${mins} min${mins > 1 ? 's' : ''} to start`;
+    if (mins < 60) return `${mins} min${mins > 1 ? "s" : ""} to start`;
     const hrs = Math.floor(mins / 60);
     const remMins = mins % 60;
-    return `${hrs} hr${hrs > 1 ? 's' : ''}${remMins > 0 ? ` ${remMins} min` : ''} to start`;
+    return `${hrs} hr${hrs > 1 ? "s" : ""}${remMins > 0 ? ` ${remMins} min` : ""} to start`;
   };
 
-  // Verify OTP function — seller uses this to confirm/confirm/start bookings (used when status is 'accepted')
   const verifyOtpForBooking = async (bookingId: string) => {
     if (!otpInput.trim()) {
-      alert('Please enter OTP');
+      alert("Please enter OTP");
       return;
     }
 
     setVerifyingOtp(bookingId);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-otp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ otp: otpInput }),
-      });
+      const token = localStorage.getItem("token");
+      const res = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-otp`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ otp: otpInput }),
+        }
+      );
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.message || 'OTP verification failed');
+        alert(data.message || "OTP verification failed");
         setVerifyingOtp(null);
         return;
       }
 
-      // Use backend-returned booking status if provided; otherwise fallbacks:
-      setBookings(prev => prev.map(b => {
-        if ((b._id === bookingId || b.id === bookingId)) {
-          const backendStatus = data.booking?.status;
-          if (backendStatus) {
-            return { ...(b as any), status: backendStatus, otpVerified: true };
+      setBookings((prev) =>
+        prev.map((b) => {
+          if (b._id === bookingId || b.id === bookingId) {
+            const backendStatus = data.booking?.status;
+            if (backendStatus) {
+              return { ...b, status: backendStatus, otpVerified: true };
+            }
+            return { ...b, status: "confirmed", otpVerified: true };
           }
-          // fallback: if it was accepted, now mark confirmed/active depending on backend assumptions
-          return { ...(b as any), status: 'confirmed', otpVerified: true };
-        }
-        return b;
-      }));
+          return b;
+        })
+      );
 
-      alert('OTP verified — booking updated!');
-      setOtpInput('');
+      alert("OTP verified — booking updated!");
+      setOtpInput("");
       setVerifyingOtp(null);
     } catch (err) {
-      console.error('verify OTP error', err);
-      alert('Error verifying OTP');
+      console.error("verify OTP error", err);
+      alert("Error verifying OTP");
       setVerifyingOtp(null);
     }
   };
 
-  // SECOND OTP: seller uses this to complete a currently active session
   const verifySecondOtpForBooking = async (bookingId: string) => {
     if (!secondOtpInput.trim() || secondOtpInput.length !== 6) {
       alert("Please enter a valid 6-digit second OTP");
@@ -219,14 +271,17 @@ const ProviderBookings = () => {
     setVerifyingSecondOtp(bookingId);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-second-otp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ otp: secondOtpInput }),
-      });
+      const res = await fetch(
+        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/verify-second-otp`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ otp: secondOtpInput }),
+        }
+      );
 
       const data = await res.json();
       if (!res.ok) {
@@ -235,53 +290,53 @@ const ProviderBookings = () => {
         return;
       }
 
-      // Update booking in-place with whatever backend returned (or at least mark completed)
       const returned = data.booking || data;
-      setBookings(prev => prev.map((b: any) => {
-        const stable = b._id || b.id;
-        if (stable === bookingId) {
-          return { ...b, ...(returned || {}), status: 'completed' };
-        }
-        return b;
-      }));
+      setBookings((prev) =>
+        prev.map((b: any) => {
+          const stable = b._id || b.id;
+          if (stable === bookingId) {
+            return { ...b, ...(returned || {}), status: "completed" };
+          }
+          return b;
+        })
+      );
 
       alert("Parking session completed!");
       setSecondOtpInput("");
       setVerifyingSecondOtp(null);
     } catch (err) {
       console.error("verifySecondOtpForBooking error:", err);
-      alert("Failed to verify second OTP");
       setVerifyingSecondOtp(null);
     }
   };
 
   const handleReject = (bookingId: string) => {
-    const booking = bookings.find(b => b._id === bookingId || b.id === bookingId);
+    const booking = bookings.find((b) => b._id === bookingId || b.id === bookingId);
     if (!booking) {
-      alert('Booking not found.');
+      alert("Booking not found.");
       return;
     }
 
     if (!canRejectBooking(booking)) {
-      alert('You can only reject a booking earlier than 1 hour before the start time.');
+      alert("You can only reject a booking earlier than 1 hour before the start time.");
       return;
     }
 
     setSelectedBooking(bookingId);
-    setRejectReasons((prev) => ({ ...prev, [bookingId]: '' }));
+    setRejectReasons((prev) => ({ ...prev, [bookingId]: "" }));
   };
 
   const confirmReject = () => {
     if (selectedBooking) {
-      const reason = (rejectReasons[selectedBooking] || '').trim();
+      const reason = (rejectReasons[selectedBooking] || "").trim();
       if (!reason) {
-        alert('Please provide a reason before rejecting.');
+        alert("Please provide a reason before rejecting.");
         return;
       }
 
-      const booking = bookings.find(b => b._id === selectedBooking || b.id === selectedBooking);
+      const booking = bookings.find((b) => b._id === selectedBooking || b.id === selectedBooking);
       if (booking && !canRejectBooking(booking)) {
-        alert('Cannot reject — booking is within 1 hour of start time.');
+        alert("Cannot reject — booking is within 1 hour of start time.");
         setSelectedBooking(null);
         return;
       }
@@ -298,10 +353,13 @@ const ProviderBookings = () => {
 
   const filterBookings = () => {
     return bookings.filter((booking) => {
-      const name = booking.user?.name ? booking.user.name.toLowerCase() : (booking.customerName || "").toLowerCase();
+      const name = booking.user?.name
+        ? booking.user.name.toLowerCase()
+        : (booking.customerName || "").toLowerCase();
       const service = booking.serviceName ? booking.serviceName.toLowerCase() : "";
 
-      const matchesSearch = name.includes(searchTerm.toLowerCase()) || service.includes(searchTerm.toLowerCase());
+      const matchesSearch =
+        name.includes(searchTerm.toLowerCase()) || service.includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === "all" || booking.status === statusFilter;
 
       let matchesDate = true;
@@ -328,23 +386,35 @@ const ProviderBookings = () => {
 
   const getStatusIcon = (status: string | undefined) => {
     switch (status) {
-      case 'accepted': return <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
-      case 'rejected': return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
-      case 'confirmed': return <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
-      case 'active': return <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />;
-      case 'completed': return <CheckCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />;
-      default: return <Clock3 className="h-5 w-5 text-primary-600 dark:text-primary-400" />;
+      case "accepted":
+        return <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />;
+      case "rejected":
+        return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
+      case "confirmed":
+        return <CheckCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
+      case "active":
+        return <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />;
+      case "completed":
+        return <CheckCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />;
+      default:
+        return <Clock3 className="h-5 w-5 text-primary-600 dark:text-primary-400" />;
     }
   };
 
   const getStatusBgColor = (status: string | undefined) => {
     switch (status) {
-      case 'accepted': return 'bg-green-50 dark:bg-green-900/20';
-      case 'rejected': return 'bg-red-50 dark:bg-red-900/20';
-      case 'confirmed': return 'bg-blue-50 dark:bg-blue-900/20';
-      case 'active': return 'bg-yellow-50 dark:bg-yellow-900/20';
-      case 'completed': return 'bg-gray-50 dark:bg-gray-900/10';
-      default: return 'bg-primary-50 dark:bg-primary-900/20';
+      case "accepted":
+        return "bg-green-50 dark:bg-green-900/20";
+      case "rejected":
+        return "bg-red-50 dark:bg-red-900/20";
+      case "confirmed":
+        return "bg-blue-50 dark:bg-blue-900/20";
+      case "active":
+        return "bg-yellow-50 dark:bg-yellow-900/20";
+      case "completed":
+        return "bg-gray-50 dark:bg-gray-900/10";
+      default:
+        return "bg-primary-50 dark:bg-primary-900/20";
     }
   };
 
@@ -353,7 +423,7 @@ const ProviderBookings = () => {
   if (loading) {
     return (
       <div className="h-[calc(100vh-64px)] flex items-center justify-center">
-        <LoadingScreen/>
+        <LoadingScreen />
       </div>
     );
   }
@@ -377,7 +447,11 @@ const ProviderBookings = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-2 border rounded-lg"
           />
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="px-4 py-2 border rounded-lg">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="px-4 py-2 border rounded-lg"
+          >
             <option value="all">All Status</option>
             <option value="pending">Pending</option>
             <option value="accepted">Accepted</option>
@@ -400,34 +474,45 @@ const ProviderBookings = () => {
                       {getStatusIcon(booking.status)}
                     </div>
                     <div>
-                      <h3 className="text-lg font-medium">{booking.user?.name || booking.customerName}</h3>
+                      <h3 className="text-lg font-medium">
+                        {booking.user?.name || booking.customerName}
+                      </h3>
                       <p className="text-sm text-gray-500">{booking.serviceName}</p>
                       <p className="text-sm text-gray-500">
                         <Calendar className="inline-block w-4 h-4 mr-2" />
-                        {booking.startTime ? new Date(booking.startTime).toLocaleDateString() : 'N/A'}
+                        {booking.startTime ? new Date(booking.startTime).toLocaleDateString() : "N/A"}
                       </p>
                       <p className="text-sm text-gray-500">
                         <Clock className="inline-block w-4 h-4 mr-2" />
-                        {booking.startTime ? new Date(booking.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                      </p>
-
-                       <p className="text-sm text-gray-500">
-                        <Calendar className="inline-block w-4 h-4 mr-2" />
-                        {booking.endTime ? new Date(booking.endTime).toLocaleDateString() : 'N/A'}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        <Clock className="inline-block w-4 h-4 mr-2" />
-                        {booking.endTime ? new Date(booking.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                        {booking.startTime
+                          ? new Date(booking.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                          : "N/A"}
                       </p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-semibold">₹{booking.totalPrice ? Math.ceil(booking.totalPrice) : "N/A"}</p>
-                    <p className={`text-sm font-medium ${booking.status === 'accepted' ? 'text-green-600' : booking.status === 'rejected' ? 'text-red-600' : booking.status === 'confirmed' ? 'text-blue-600' : booking.status === 'active' ? 'text-yellow-600' : booking.status === 'completed' ? 'text-gray-600' : 'text-yellow-600'}`}>
-                      {booking.status ? (booking.status.charAt(0).toUpperCase() + booking.status.slice(1)) : 'Unknown'}
+                    <p className="text-lg font-semibold">
+                      ₹{booking.totalPrice ? Math.ceil(booking.totalPrice) : "N/A"}
                     </p>
-                    {booking.paymentStatus && (
-                      <p className={`text-xs ${booking.paymentStatus === 'paid' ? 'text-green-500' : 'text-orange-500'}`}>
+                    <p
+                      className={`text-sm font-medium ${
+                        booking.status === "accepted"
+                          ? "text-green-600"
+                          : booking.status === "rejected"
+                          ? "text-red-600"
+                          : booking.status === "confirmed"
+                          ? "text-blue-600"
+                          : booking.status === "active"
+                          ? "text-yellow-600"
+                          : booking.status === "completed"
+                          ? "text-gray-600"
+                          : "text-yellow-600"
+                      }`}
+                    >
+                      {booking.status ? booking.status.charAt(0).toUpperCase() + booking.status.slice(1) : "Unknown"}
+                    </p>
+                     {booking.paymentStatus && (
+                      <p className={`text-xs ${booking.paymentStatus === "paid" ? "text-green-500" : "text-orange-500"}`}>
                         Payment: {booking.paymentStatus}
                       </p>
                     )}
@@ -435,54 +520,45 @@ const ProviderBookings = () => {
                 </div>
 
                 {/* Action buttons - show different options based on status and payment */}
-                {booking.status === 'pending' && (
-                  <div className="mt-4">
-                    {selectedBooking === stableId ? (
-                      <div className="flex space-x-3">
-                        <textarea
-                          value={rejectReasons[stableId] || ""}
-                          onChange={(e) => setRejectReasons(prev => ({ ...prev, [stableId]: e.target.value }))}
-                          placeholder="Reason for rejection..."
-                          className="flex-1 px-4 py-2 border rounded-lg"
-                        />
-                        <button
-                          onClick={confirmReject}
-                          className={`px-4 py-2 rounded-lg text-white ${canRejectBooking(booking) ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-400 cursor-not-allowed'}`}
-                          disabled={!canRejectBooking(booking)}
-                        >
-                          Confirm Reject
-                        </button>
-                        <button
-                          onClick={() => setSelectedBooking(null)}
-                          className="px-4 py-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex space-x-3">
-                        <button
-                          onClick={() => handleStatusChange(booking._id, 'accepted')}
-                          className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-                        >
-                          Accept
-                        </button>
+                {(booking.status === "pending" || booking.status === "accepted") && (
+                  <div className="mt-4 flex space-x-3">
+                    {/* Accept button */}
+                    {booking.status === "pending" && (
+                      <button
+                        onClick={() => handleStatusChange(booking._id, "accepted")}
+                        className="flex-1 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                      >
+                        Accept
+                      </button>
+                    )}
 
-                        <button
-                          onClick={() => handleReject(booking._id || booking.id)}
-                          disabled={!canRejectBooking(booking)}
-                          title={!canRejectBooking(booking) ? 'Cannot reject within 1 hour of start time' : 'Reject booking'}
-                          className={`flex-1 ${canRejectBooking(booking) ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-gray-300 text-gray-600 cursor-not-allowed'} px-4 py-2 rounded-lg transition-colors duration-200`}
-                        >
-                          {canRejectBooking(booking) ? 'Reject' : 'Reject (locked)'}
-                        </button>
-                      </div>
+                    {/* Reject button */}
+                    {booking.status === "pending" && (
+                      <button
+                        onClick={() => handleReject(booking._id || booking.id)}
+                        disabled={!canRejectBooking(booking)}
+                        title={!canRejectBooking(booking) ? "Cannot reject within 1 hour of start time" : "Reject booking"}
+                        className={`flex-1 ${canRejectBooking(booking) ? "bg-red-600 hover:bg-red-700 text-white" : "bg-gray-300 text-gray-600 cursor-not-allowed"} px-4 py-2 rounded-lg transition-colors duration-200`}
+                      >
+                        {canRejectBooking(booking) ? "Reject" : "Reject (locked)"}
+                      </button>
+                    )}
+
+                    {/* Cancel button */}
+                    {booking.status !== "completed" && booking.status !== "cancelled" && (
+                      <button
+                        onClick={() => handleCancelBooking(booking._id || booking.id)}
+                        className={`flex-1 ${canCancelBooking(booking) ? "bg-orange-600 hover:bg-orange-700 text-white" : "bg-gray-300 text-gray-600 cursor-not-allowed"} px-4 py-2 rounded-lg transition-colors duration-200`}
+                        title={canCancelBooking(booking) ? "Cancel booking" : "Cannot cancel online; contact customer care"}
+                      >
+                        {canCancelBooking(booking) ? "Cancel Booking" : "Cancel (Contact Support)"}
+                      </button>
                     )}
                   </div>
                 )}
 
-                {/* OTP Verification section for accepted bookings (existing flow) */}
-                {booking.paymentStatus === 'paid' && booking.status === 'accepted' && (
+                {/* OTP Verification section for accepted bookings */}
+                {booking.paymentStatus === "paid" && booking.status === "accepted" && (
                   <div className="mt-4 p-4 bg-blue-50 rounded-lg border">
                     {canEnterOtp(booking) ? (
                       <div>
@@ -497,13 +573,13 @@ const ProviderBookings = () => {
                           <input
                             type="text"
                             placeholder="Enter 6-digit OTP"
-                            value={verifyingOtp === stableId ? otpInput : ''}
+                            value={verifyingOtp === stableId ? otpInput : ""}
                             onChange={(e) => {
                               if (verifyingOtp === stableId) {
-                                setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6));
                               } else {
                                 setVerifyingOtp(stableId);
-                                setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                                setOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6));
                               }
                             }}
                             className="flex-1 px-3 py-2 border border-blue-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -514,14 +590,7 @@ const ProviderBookings = () => {
                             disabled={verifyingOtp === stableId && (!otpInput || otpInput.length !== 6)}
                             className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white px-4 py-2 rounded transition-colors duration-200 flex items-center"
                           >
-                            {verifyingOtp === stableId && otpInput.length !== 6 ? (
-                              "Verifying..."
-                            ) : (
-                              <>
-                                <Key className="h-4 w-4 mr-2" />
-                                Verify OTP
-                              </>
-                            )}
+                            {verifyingOtp === stableId && otpInput.length !== 6 ? "Verifying..." : <> <Key className="h-4 w-4 mr-2" /> Verify OTP </>}
                           </button>
                         </div>
                       </div>
@@ -539,8 +608,8 @@ const ProviderBookings = () => {
                   </div>
                 )}
 
-                {/* SECOND OTP: only show for ACTIVE bookings (seller completes session) */}
-                {booking.status === 'active' && (
+                {/* SECOND OTP: only for ACTIVE bookings */}
+                {booking.status === "active" && (
                   <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
                     <div className="flex items-center mb-3">
                       <Key className="h-5 w-5 text-green-600 mr-2" />
@@ -553,13 +622,13 @@ const ProviderBookings = () => {
                       <input
                         type="text"
                         placeholder="Enter 6-digit second OTP"
-                        value={verifyingSecondOtp === stableId ? secondOtpInput : ''}
+                        value={verifyingSecondOtp === stableId ? secondOtpInput : ""}
                         onChange={(e) => {
                           if (verifyingSecondOtp === stableId) {
-                            setSecondOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            setSecondOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6));
                           } else {
                             setVerifyingSecondOtp(stableId);
-                            setSecondOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6));
+                            setSecondOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6));
                           }
                         }}
                         className="flex-1 px-3 py-2 border border-green-300 rounded focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -569,19 +638,11 @@ const ProviderBookings = () => {
                         onClick={() => verifySecondOtpForBooking(stableId)}
                         className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded transition-colors duration-200 flex items-center"
                       >
-                        {verifyingSecondOtp === stableId ? (
-                          "Completing..."
-                        ) : (
-                          <>
-                            <Key className="h-4 w-4 mr-2" />
-                            Complete Session
-                          </>
-                        )}
+                        {verifyingSecondOtp === stableId ? "Completing..." : <> <Key className="h-4 w-4 mr-2" /> Complete Session </>}
                       </button>
                     </div>
                   </div>
                 )}
-
               </motion.div>
             );
           })}
