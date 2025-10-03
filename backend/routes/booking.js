@@ -119,4 +119,16 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
   }
 });
 
+
+
+// backend/routes/booking.js
+// ...existing imports
+import { extendBooking } from '../controllers/booking.js'; // add this import
+
+// ... existing router declarations
+
+// Add extend route (best placed near other booking endpoints)
+router.post('/:id/extend', protect, extendBooking);
+
+
 export default router;

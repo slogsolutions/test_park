@@ -42,7 +42,7 @@ const bookingSchema = new mongoose.Schema({
   drivingLicenseUrl: String,
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected', 'confirmed', 'active', 'completed', 'cancelled'],
+    enum: ['pending', 'accepted', 'rejected', 'confirmed', 'active', 'overdue', 'completed', 'cancelled'],
     default: 'pending', // <-- sensible default (not confirmed)
   },
   paymentStatus: {
