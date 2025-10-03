@@ -38,6 +38,8 @@ import { sellerRoutes } from "./routes/SellerRoutes";
 import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
 import EditProfile from './pages/EditProfile';
 import PhoneVerifyModal from "./components/PhoneVerifyModal"; // 🔹 Added
+import CaptainDashboard from './pages/CaptainDashboard';
+import RequireAuth from "./components/RequireAuth"; // <-- ADDED: import the RequireAuth wrapper
 
 export default function App() {
 
@@ -110,7 +112,7 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
-
+        <Route path="/captain" element={<RequireAuth role="captain"><CaptainDashboard/></RequireAuth>} />
         {/* Shared protected routes */}
         <Route path="/vehicle-details" element={<ProtectedRoute><VehicleDetails /></ProtectedRoute>} />
         <Route path="/add-vechile" element={<ProtectedRoute><AddVehicle /></ProtectedRoute>} />

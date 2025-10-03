@@ -7,6 +7,10 @@ const parkingSpaceSchema = new mongoose.Schema({
     ref: "ParkFinderSecondUser",
     required: true,
   },
+  // backend/models/ParkingSpace.js
+approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'ParkFinderSecondUser' },
+approvedAt: { type: Date },
+
   title: {
     type: String,
     required: true,

@@ -7,132 +7,38 @@ import User from '../models/User.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/email.js';
 import Twilio from 'twilio';
 
-
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const twilioClient = Twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const TWILIO_VERIFY_SID = process.env.TWILIO_VERIFY_SERVICE_SID;
 
+/**
+ * Single generateToken function that accepts either:
+ * - a user object (preferred) -> will include id, isAdmin, isCaptain in payload
+ * - or an id string -> will include only id in payload
+ *
+ * This keeps backward compatibility with existing calls that pass user._id.
+ */
+const generateToken = (userOrId) => {
+  // If a string (or something that's not an object) was passed, treat it as id
+  if (!userOrId || typeof userOrId === 'string' || typeof userOrId === 'number') {
+    const id = typeof userOrId === 'string' || typeof userOrId === 'number' ? userOrId : undefined;
+    return jwt.sign({ id }, process.env.JWT_SECRET, {
+      expiresIn: '30d',
+    });
+  }
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d',
-  });
+  // If a user object was passed, include flags
+  const user = userOrId;
+  return jwt.sign(
+    {
+      id: user._id,
+      isAdmin: !!user.isAdmin,
+      isCaptain: !!user.isCaptain,
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '7d' }
+  );
 };
-
-// export const register = async (req, res) => {
-//   const errors = validationResult(req);
-//   if (!errors.isEmpty()) {
-//     console.log("Validation errors:", errors.array());
-//     return res.status(400).json({ errors: errors.array() });
-//   }
-
-//   try {
-//     const { name, email, password } = req.body;
-//     console.log("Registering user:", email);
-
-//     let user = await User.findOne({ email });
-//     if (user) {
-//       console.log("User already exists:", email);
-//       return res.status(400).json({ message: 'User already exists' });
-//     }
-
-//     const verificationToken = crypto.randomBytes(20).toString('hex');
-
-//     user = new User({
-//       name,
-//       email,
-//       password,
-//       verificationToken,
-//       verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
-//     });
-
-//     await user.save();
-//     console.log("User saved:", user._id);
-
-//     await sendVerificationEmail(email, verificationToken);
-//     console.log("Verification email sent to:", email);
-
-//     res.status(201).json({
-//       message: 'Registration successful. Please check your email to verify your account.',
-//     });
-//   } catch (error) {
-//     console.error("Registration error:", error);
-//     res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
-// set online status for the authenticated user
-
-// export const register = async (req, res) => {
-//   const errors = validationResult(req);
-//   if (!errors.isEmpty()) {
-//     console.log("Validation errors:", errors.array());
-//     return res.status(400).json({ errors: errors.array() });
-//   }
-
-//   try {
-//     const { name, email, password } = req.body;
-//     console.log("Registering user:", email);
-
-//     let user = await User.findOne({ email });
-//     if (user) {
-//       return res.status(400).json({ message: 'User already exists' });
-//     }
-
-//     const verificationToken = crypto.randomBytes(20).toString('hex');
-
-//     user = new User({
-//       name,
-//       email,
-//       password,
-//       verificationToken,
-//       verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
-//     });
-
-//         // save the user first
-//     await user.save();
-//     console.log("User saved:", user._id);
-
-//     try {
-//       await sendVerificationEmail(email, verificationToken);
-//       console.log("Verification email sent to:", email);
-//     } catch (emailErr) {
-//       console.error("Email sending failed:", emailErr);
-//       return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
-//     }
-
-// // after: await user.save();
-
-// const savedUser = await user.save();
-// const out = savedUser.toObject ? savedUser.toObject() : savedUser;
-// if (out.password) delete out.password;
-
-// // create a JWT token if you want to auto-log the user in
-// const token = generateToken(savedUser._id);
-
-// // attempt to send verification email (your existing try/catch is fine)
-// try {
-//   await sendVerificationEmail(email, verificationToken);
-// } catch (emailErr) {
-//   console.error('Warning: verification email failed to send:', emailErr);
-// }
-
-// // Respond with created user + token + message
-// return res.status(201).json({
-//   user: out,
-//   token,
-//   message: 'Registration successful. Please check your email to verify your account.',
-// });
-
-
-//   } catch (error) {
-//     console.error("Registration error:", error);
-//     res.status(500).json({ message: 'Server error. Please try again later.' });
-//   }
-// };
-
-
 
 //for easy Register 
 export const register = async (req, res) => {
