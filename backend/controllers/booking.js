@@ -4,12 +4,12 @@ import Booking from '../models/Booking.js';
 import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js';
 import UserToken from '../models/UserToken.js';
-import NotificationService from '../service/NotificationService.js'; // your wrapper for firebase-admin
+import NotificationService from '../service/NotificationService.js'; // wrapper for firebase-admin (if in use)
 
 // Helper function for sending notifications (placeholder)
 const sendNotification = (email, subject, message) => {
   console.log(`Notification sent to ${email}: ${subject} - ${message}`);
-  // Implement your notification logic here (email, SMS, push, etc.)
+  // Implement your actual notification logic here (email, SMS, push, etc.)
 };
 
 // In-memory timers map (best-effort; not durable across restarts)
@@ -146,7 +146,7 @@ setInterval(cleanupOverdueBookings, 60 * 1000);
 cleanupOverdueBookings().catch((e) => console.error(e));
 
 /**
- * Create booking
+ * Create booking (keeps your existing behavior)
  */
 // ... keep your existing createBooking code unchanged ...
 // I will re-export your existing createBooking implementation as-is so nothing else changes.
@@ -520,6 +520,10 @@ export const getProviderBookings = async (req, res) => {
 
 /**
  * Generate OTP (buyer triggers this after booking payment)
+ *
+ * Behavior:
+ * - If booking.status is NOT 'active' => generate booking.otp (used to START session)
+ * - If booking.status IS 'active' => generate booking.secondOtp (used to END/COMPLETE session)
  */
 export const generateOTP = async (req, res) => {
   try {
@@ -543,25 +547,63 @@ export const generateOTP = async (req, res) => {
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresInMs = 10 * 60 * 1000; // 10 minutes
 
-    // Set expiry (10 minutes from now)
-    const expiresInMs = 10 * 60 * 1000;
-    booking.otp = otp;
-    booking.otpExpires = new Date(Date.now() + expiresInMs);
-    booking.otpVerified = false;
+    if (booking.status === 'active') {
+      // If session is active, generate second OTP for completion
+      booking.secondOtp = otp;
+      booking.secondOtpExpires = new Date(Date.now() + expiresInMs);
+      await booking.save();
 
-    await booking.save();
+      return res.status(200).json({
+        otp,
+        expiresAt: booking.secondOtpExpires,
+        bookingId: booking._id,
+        type: 'second'
+      });
+    } else {
+      // Generate primary OTP to start session
+      booking.otp = otp;
+      booking.otpExpires = new Date(Date.now() + expiresInMs);
+      booking.otpVerified = false;
+      await booking.save();
 
-    return res.status(200).json({
-      otp,
-      expiresAt: booking.otpExpires,
-      bookingId: booking._id
-    });
+      return res.status(200).json({
+        otp,
+        expiresAt: booking.otpExpires,
+        bookingId: booking._id,
+        type: 'primary'
+      });
+    }
   } catch (error) {
     console.error('generateOTP error', error);
     return res.status(500).json({ message: 'Failed to generate OTP', error: error.message });
   }
 };
+// safeDecrement.js (or inside booking.js)
+export const decrementParkingAvailable = async (parkingId) => {
+  if (!parkingId) return null;
+  // Atomically decrement but do not go below 0; return updated doc
+  const updated = await ParkingSpace.findOneAndUpdate(
+    { _id: parkingId, $expr: { $gt: ['$availableSpots', 0] } }, // only if > 0
+    { $inc: { availableSpots: -1 } },
+    { new: true }
+  );
+
+  // If the doc matched, emit socket update for front-end
+  if (updated && global.io) {
+    try {
+      global.io.emit('parking-updated', {
+        parkingId: updated._id.toString(),
+        availableSpots: updated.availableSpots,
+      });
+    } catch (e) {
+      console.warn('socket emit error (parking-updated)', e);
+    }
+  }
+  return updated;
+};
+
 
 export const verifyOTP = async (req, res) => {
   try {
@@ -569,7 +611,121 @@ export const verifyOTP = async (req, res) => {
     let { otp } = req.body;
     const providerId = req.user._id;
 
-    if (!otp && otp !== 0) {
+    if (otp === undefined || otp === null) {
+      return res.status(400).json({ message: 'OTP is required' });
+    }
+    otp = otp.toString().trim();
+
+    const booking = await Booking.findById(bookingId)
+      .populate({ path: 'parkingSpace', populate: { path: 'owner', select: '_id name email' } })
+      .populate('user', 'name email');
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+    // Authorization check
+    let isAuthorized = false;
+    if (booking.providerId) {
+      isAuthorized = booking.providerId.toString() === providerId.toString();
+    } else if (booking.parkingSpace && booking.parkingSpace.owner) {
+      isAuthorized = booking.parkingSpace.owner._id.toString() === providerId.toString();
+    }
+    if (!isAuthorized) return res.status(403).json({ message: 'Not authorized' });
+
+    // Ensure OTP was generated for primary OTP
+    if (!booking.otp || !booking.otpExpires) {
+      return res.status(400).json({ message: 'OTP not generated for this booking' });
+    }
+
+    // Check expiry
+    if (new Date(booking.otpExpires) < new Date()) {
+      return res.status(400).json({ message: 'OTP expired' });
+    }
+
+    // Compare OTP
+    if (booking.otp.toString().trim() !== otp) {
+      return res.status(400).json({ message: 'Invalid OTP' });
+    }
+
+    // If booking is accepted/confirmed -> this OTP starts the session
+    if (['accepted', 'confirmed'].includes(booking.status)) {
+      booking.status = 'active';
+      booking.otpVerified = true;
+      booking.startedAt = new Date();
+
+      // Calculate session duration (prefer booking.startTime/endTime)
+      let sessionMs = 60 * 60 * 1000; // default 1 hour
+      if (booking.startTime && booking.endTime) {
+        sessionMs = new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime();
+        if (sessionMs <= 0) sessionMs = 60 * 60 * 1000;
+      }
+
+      booking.sessionEndAt = new Date(booking.startedAt.getTime() + sessionMs);
+
+      // Clear primary OTP fields (one-time use)
+      booking.otp = null;
+      booking.otpExpires = null;
+
+      await booking.save();
+
+      // schedule best-effort completion (in-memory)
+      const msUntilEnd = booking.sessionEndAt.getTime() - Date.now();
+      if (msUntilEnd > 0) {
+        if (bookingTimers.has(booking._id.toString())) {
+          clearTimeout(bookingTimers.get(booking._id.toString()));
+          bookingTimers.delete(booking._id.toString());
+        }
+        const t = setTimeout(() => markBookingCompleted(booking._id).catch(console.error), msUntilEnd);
+        bookingTimers.set(booking._id.toString(), t);
+      } else {
+        await markBookingCompleted(booking._id);
+      }
+
+      const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+      return res.status(200).json({ message: 'OTP verified and session started', booking: populated });
+    }
+
+    // Backwards-compat: If booking is active -> this (primary) OTP may have been used for completion in older flows
+    if (booking.status === 'active') {
+      booking.status = 'completed';
+      booking.completedAt = new Date();
+      booking.sessionEndAt = booking.sessionEndAt && new Date(booking.sessionEndAt) > new Date()
+        ? booking.sessionEndAt
+        : new Date();
+
+      booking.otp = null;
+      booking.otpExpires = null;
+      booking.otpVerified = true;
+
+      await booking.save();
+
+      if (bookingTimers.has(booking._id.toString())) {
+        clearTimeout(bookingTimers.get(booking._id.toString()));
+        bookingTimers.delete(booking._id.toString());
+      }
+
+      const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+      return res.status(200).json({ message: 'OTP verified — booking completed', booking: populated });
+    }
+
+    // otherwise not allowed
+    return res.status(400).json({ message: 'Booking must be accepted, confirmed or active to verify OTP' });
+  } catch (err) {
+    console.error('verifyOTP error:', err);
+    return res.status(500).json({ message: 'Failed to verify OTP', error: err.message });
+  }
+};
+
+/**
+ * Verify SECOND OTP (provider triggers when booking is ACTIVE) -> completes the booking.
+ *
+ * This checks booking.secondOtp & booking.secondOtpExpires and marks booking completed.
+ */
+export const verifySecondOtp = async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    let { otp } = req.body;
+    const providerId = req.user._id;
+
+    if (otp === undefined || otp === null) {
       return res.status(400).json({ message: 'OTP is required' });
     }
     otp = otp.toString().trim();
@@ -587,192 +743,54 @@ export const verifyOTP = async (req, res) => {
     } else if (booking.parkingSpace && booking.parkingSpace.owner) {
       isAuthorized = booking.parkingSpace.owner._id.toString() === providerId.toString();
     }
-    if (!isAuthorized) return res.status(403).json({ message: 'Not authorized' });
+    if (!isAuthorized) return res.status(403).json({ message: 'Not authorized to verify OTP for this booking' });
 
-    if (!['accepted', 'confirmed'].includes(booking.status)) {
-      return res.status(400).json({ message: 'Booking must be accepted to verify OTP' });
+    // Only allow completion when booking is active
+    if (booking.status !== 'active') {
+      return res.status(400).json({ message: 'Booking must be active to verify second OTP' });
     }
 
-    if (!booking.otp || !booking.otpExpires) {
-      return res.status(400).json({ message: 'OTP not generated' });
+    // Ensure second OTP exists
+    if (!booking.secondOtp || !booking.secondOtpExpires) {
+      return res.status(400).json({ message: 'Second OTP not generated for this booking' });
     }
 
-    if (new Date(booking.otpExpires) < new Date()) {
-      return res.status(400).json({ message: 'OTP expired' });
+    // Check expiry
+    if (new Date(booking.secondOtpExpires) < new Date()) {
+      return res.status(400).json({ message: 'Second OTP expired' });
     }
 
-    if (booking.otp.toString().trim() !== otp) {
+    // Compare
+    if (booking.secondOtp.toString().trim() !== otp) {
       return res.status(400).json({ message: 'Invalid OTP' });
     }
 
-    // OTP verified - start session and generate second OTP
-    booking.status = 'active';
+    // OTP valid -> complete booking
+    booking.status = 'completed';
+    booking.completedAt = new Date();
+
+    // Clear second OTP fields
+    booking.secondOtp = null;
+    booking.secondOtpExpires = null;
     booking.otpVerified = true;
-    booking.startedAt = new Date();
-
-    // Calculate session duration from startTime/endTime
-    let sessionMs = 60 * 60 * 1000; // 1 hour default
-    if (booking.startTime && booking.endTime) {
-      sessionMs = new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime();
-      if (sessionMs <= 0) sessionMs = 60 * 60 * 1000;
-    }
-    booking.sessionEndAt = new Date(booking.startedAt.getTime() + sessionMs);
-
-    // Generate second OTP (6 digits)
-    const secondOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    booking.secondOtp = secondOtp;
-    booking.secondOtpExpires = booking.sessionEndAt;
-
-    // Clear first OTP
-    booking.otp = null;
-    booking.otpExpires = null;
 
     await booking.save();
 
-    // Schedule auto-completion
-    const msUntilEnd = booking.sessionEndAt.getTime() - Date.now();
-    if (msUntilEnd > 0) {
-      if (bookingTimers.has(booking._id.toString())) {
+    // clear any in-memory timer
+    try {
+      if (bookingTimers && bookingTimers.has(booking._id.toString())) {
         clearTimeout(bookingTimers.get(booking._id.toString()));
         bookingTimers.delete(booking._id.toString());
       }
-      const timer = setTimeout(() => markBookingCompleted(booking._id).catch(console.error), msUntilEnd);
-      bookingTimers.set(booking._id.toString(), timer);
-    }
-
-    // Send notification with second OTP (optional)
-    try {
-      if (booking.user && booking.user.email) {
-        sendNotification(
-          booking.user.email,
-          'Parking Session Started',
-          `Your parking session has started. Second OTP: ${secondOtp}. Show this to the provider when leaving.`
-        );
-      }
-    } catch (err) {
-      console.warn('Failed to send second OTP notification:', err);
+    } catch (e) {
+      console.warn('Failed to clear booking timer after completion', e);
     }
 
     const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
-    return res.status(200).json({
-      message: 'Session started successfully',
-      booking: populated
-    });
 
+    return res.status(200).json({ message: 'Second OTP verified and booking completed', booking: populated });
   } catch (err) {
-    console.error('verifyOTP error:', err);
-    return res.status(500).json({ message: 'Failed to verify OTP', error: err.message });
-  }
-};
-
-
-// --- Replace the whole function below in backend/controllers/booking.js ---
-export const verifySecondOTP = async (req, res) => {
-  try {
-    const bookingId = req.params.id;
-    let { otp } = req.body;
-    const providerId = req.user._id;
-
-    if (!otp && otp !== 0) {
-      return res.status(400).json({ message: 'Second OTP is required' });
-    }
-    otp = otp.toString().trim();
-
-    const booking = await Booking.findById(bookingId)
-      .populate('parkingSpace')
-      .populate('user', 'name email');
-
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' });
-    }
-
-    // Authorization: either providerId stored on booking or parkingSpace owner
-    let isAuthorized = false;
-    if (booking.providerId) {
-      isAuthorized = booking.providerId.toString() === providerId.toString();
-    } else {
-      const ps = await ParkingSpace.findById(booking.parkingSpace);
-      if (ps && ps.owner) {
-        isAuthorized = ps.owner.toString() === providerId.toString();
-      }
-    }
-    if (!isAuthorized) {
-      return res.status(403).json({ message: 'Not authorized' });
-    }
-
-    // Must be active to accept second OTP
-    if (booking.status !== 'active') {
-      return res.status(400).json({ message: 'Booking is not active' });
-    }
-
-    // Check second OTP presence and expiry
-    if (!booking.secondOtp || !booking.secondOtpExpires || new Date() > booking.secondOtpExpires) {
-      return res.status(400).json({ message: 'Second OTP expired or not generated' });
-    }
-
-    if (booking.secondOtp.toString() !== otp) {
-      return res.status(400).json({ message: 'Invalid second OTP' });
-    }
-
-    // Clear any scheduled timer (best-effort cleanup)
-    if (bookingTimers.has(booking._id.toString())) {
-      clearTimeout(bookingTimers.get(booking._id.toString()));
-      bookingTimers.delete(booking._id.toString());
-    }
-
-    // --- IMPORTANT CHANGE: do NOT delete the booking.
-    // Instead, mark it completed and set timestamps so the document remains in DB.
-    const now = new Date();
-    booking.status = 'completed';
-    booking.completedAt = now;
-
-    // Set an explicit endedAt / endTime where appropriate so other parts of app/cron can rely on it.
-    // Preserve existing sessionEndAt if present; otherwise record actual end time.
-    if (!booking.endedAt) booking.endedAt = now;
-    if (!booking.endTime) {
-      // If sessionEndAt exists (scheduled end), prefer that; otherwise use now
-      booking.endTime = booking.sessionEndAt ? booking.sessionEndAt : now;
-    }
-
-    // Optional: clear second OTP so it can't be reused
-    booking.secondOtp = null;
-    booking.secondOtpExpires = null;
-
-    // Persist the changes
-    await booking.save();
-
-    // Release parking spot (increment availableSpots & emit)
-    try {
-      if (booking.parkingSpace) {
-        await releaseParkingSpot(booking.parkingSpace, booking);
-      }
-    } catch (err) {
-      console.warn('verifySecondOTP: failed to release parking spot', err);
-    }
-
-    // Send completion notification (best-effort)
-    try {
-      if (booking.user && booking.user.email) {
-        sendNotification(
-          booking.user.email,
-          'Parking Session Completed',
-          'Your parking session has been successfully completed.'
-        );
-      }
-    } catch (err) {
-      console.warn('Failed to send completion notification:', err);
-    }
-
-    // Return the updated booking in the response (populated)
-    const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
-
-    return res.status(200).json({
-      message: 'Booking session completed',
-      booking: populated
-    });
-
-  } catch (err) {
-    console.error('verifySecondOTP error:', err);
+    console.error('verifySecondOtp error', err);
     return res.status(500).json({ message: 'Failed to verify second OTP', error: err.message });
   }
 };

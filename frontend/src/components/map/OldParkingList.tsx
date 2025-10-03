@@ -5,8 +5,8 @@ import { FaStar, FaMapMarkerAlt, FaClock, FaShield, FaBolt, FaWheelchair, FaVide
 interface ParkingListProps {
   spaces: ParkingSpace[];
   onSpaceSelect: (space: ParkingSpace) => void;
-  searchRadius?: number;
-  onRadiusChange?: (radius: number) => void;
+  // searchRadius?: number;
+  // onRadiusChange?: (radius: number) => void;
   filters?: any;
   userLocation?: { lat: number; lng: number } | null;
 }
@@ -19,7 +19,7 @@ export default function ParkingSpaceList({ spaces, onSpaceSelect }: ParkingListP
           <FaSearch className="text-3xl text-blue-600" />
         </div>
         <h3 className="text-xl font-bold text-gray-700 mb-2">No parking spaces found</h3>
-        <p className="text-gray-500 mb-4 max-w-xs">Try adjusting your search criteria or increasing the search radius</p>
+        {/* <p className="text-gray-500 mb-4 max-w-xs">Try adjusting your search criteria or increasing the search radius</p> */}
         <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-3 max-w-xs">
           <p className="text-yellow-700 text-sm">💡 Tip: Try searching in a different area or removing some filters</p>
         </div>
