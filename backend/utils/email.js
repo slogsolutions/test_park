@@ -1,8 +1,8 @@
 import nodemailer from 'nodemailer';
 
 // Uncomment if you want to load env vars here, usually done in your main entry file
-// import dotenv from 'dotenv';
-// dotenv.config();
+import dotenv from 'dotenv';
+dotenv.config();
 
 const createTransporter = () => {
   console.log('[EMAIL] Creating transporter...');
@@ -86,3 +86,7 @@ export const sendNotification = async (recipientEmail, subject, message) => {
   await sendEmail({ email: recipientEmail, subject, message });
   console.log('[EMAIL] Notification email sent.');
 };
+
+
+
+

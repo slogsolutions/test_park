@@ -64,6 +64,77 @@ const generateToken = (id) => {
 
 // set online status for the authenticated user
 
+// export const register = async (req, res) => {
+//   const errors = validationResult(req);
+//   if (!errors.isEmpty()) {
+//     console.log("Validation errors:", errors.array());
+//     return res.status(400).json({ errors: errors.array() });
+//   }
+
+//   try {
+//     const { name, email, password } = req.body;
+//     console.log("Registering user:", email);
+
+//     let user = await User.findOne({ email });
+//     if (user) {
+//       return res.status(400).json({ message: 'User already exists' });
+//     }
+
+//     const verificationToken = crypto.randomBytes(20).toString('hex');
+
+//     user = new User({
+//       name,
+//       email,
+//       password,
+//       verificationToken,
+//       verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
+//     });
+
+//         // save the user first
+//     await user.save();
+//     console.log("User saved:", user._id);
+
+//     try {
+//       await sendVerificationEmail(email, verificationToken);
+//       console.log("Verification email sent to:", email);
+//     } catch (emailErr) {
+//       console.error("Email sending failed:", emailErr);
+//       return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
+//     }
+
+// // after: await user.save();
+
+// const savedUser = await user.save();
+// const out = savedUser.toObject ? savedUser.toObject() : savedUser;
+// if (out.password) delete out.password;
+
+// // create a JWT token if you want to auto-log the user in
+// const token = generateToken(savedUser._id);
+
+// // attempt to send verification email (your existing try/catch is fine)
+// try {
+//   await sendVerificationEmail(email, verificationToken);
+// } catch (emailErr) {
+//   console.error('Warning: verification email failed to send:', emailErr);
+// }
+
+// // Respond with created user + token + message
+// return res.status(201).json({
+//   user: out,
+//   token,
+//   message: 'Registration successful. Please check your email to verify your account.',
+// });
+
+
+//   } catch (error) {
+//     console.error("Registration error:", error);
+//     res.status(500).json({ message: 'Server error. Please try again later.' });
+//   }
+// };
+
+
+
+//for easy Register 
 export const register = async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -75,62 +146,35 @@ export const register = async (req, res) => {
     const { name, email, password } = req.body;
     console.log("Registering user:", email);
 
+    // Check if user already exists
     let user = await User.findOne({ email });
     if (user) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    const verificationToken = crypto.randomBytes(20).toString('hex');
-
+    // Create new user
     user = new User({
       name,
       email,
       password,
-      verificationToken,
-      verificationExpire: Date.now() + 24 * 60 * 60 * 1000,
     });
 
-        // save the user first
-    await user.save();
-    console.log("User saved:", user._id);
+    // Save user
+    const savedUser = await user.save();
+    console.log("User saved:", savedUser._id);
 
-    try {
-      await sendVerificationEmail(email, verificationToken);
-      console.log("Verification email sent to:", email);
-    } catch (emailErr) {
-      console.error("Email sending failed:", emailErr);
-      return res.status(500).json({ message: 'Failed to send verification email. Please try again later.' });
-    }
-
-// after: await user.save();
-
-const savedUser = await user.save();
-const out = savedUser.toObject ? savedUser.toObject() : savedUser;
-if (out.password) delete out.password;
-
-// create a JWT token if you want to auto-log the user in
-const token = generateToken(savedUser._id);
-
-// attempt to send verification email (your existing try/catch is fine)
-try {
-  await sendVerificationEmail(email, verificationToken);
-} catch (emailErr) {
-  console.error('Warning: verification email failed to send:', emailErr);
-}
-
-// Respond with created user + token + message
-return res.status(201).json({
-  user: out,
-  token,
-  message: 'Registration successful. Please check your email to verify your account.',
-});
-
+    // Respond with success message
+    return res.status(201).json({
+      message: 'User registered successfully.',
+    });
 
   } catch (error) {
     console.error("Registration error:", error);
     res.status(500).json({ message: 'Server error. Please try again later.' });
   }
 };
+
+
 // POST /api/auth/send-phone-otp
 export const sendPhoneOtp = async (req, res) => {
   try {
@@ -289,12 +333,12 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    if (!user.isVerified) {
-      return res.status(401).json({ 
-        message: 'Please verify your email before logging in',
-        needsVerification: true 
-      });
-    }
+    // if (!user.isVerified) {
+    //   return res.status(401).json({ 
+    //     message: 'Please verify your email before logging in',
+    //     needsVerification: true 
+    //   });
+    // }
 
     const token = generateToken(user._id);
 
