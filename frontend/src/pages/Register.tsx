@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-toastify';
@@ -15,6 +15,10 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
+
+  // Guard to prevent duplicate submission and hold the in-flight promise
+  const isSubmittingRef = useRef(false);
+  const ongoingPromiseRef = useRef<Promise<any> | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,11 +47,20 @@ export default function Register() {
 
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
+      // optional: block google login while a normal registration is in-flight
+      if (isSubmittingRef.current) {
+        toast.info('Please wait until the current request finishes');
+        return;
+      }
+      setLoading(true);
       await googleLogin(credentialResponse.credential);
       toast.success('Google registration successful!');
       navigate('/', { replace: true });
     } catch (error: any) {
-      toast.error(error.message || 'Google registration failed');
+      console.error('[WEB DEBUG] googleLogin failed', error);
+      toast.error(error?.message || 'Google registration failed');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -206,6 +219,6 @@ export default function Register() {
           </p>
         </div>
       </div>
-    </div>
-  );
+    </div>
+  );
 }

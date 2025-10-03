@@ -44,8 +44,8 @@ export default function App() {
   // useFirebaseMessaging();
 
   return (
-    <GoogleOAuthProvider clientId={env.GOOGLE_CLIENT_ID}>
       <AuthProvider>
+        <GoogleOAuthProvider clientId={env.GOOGLE_CLIENT_ID}>
         <RoleProvider>
           <MapProvider>
             <Router>
@@ -53,8 +53,8 @@ export default function App() {
             </Router>
           </MapProvider>
         </RoleProvider>
+        </GoogleOAuthProvider>
       </AuthProvider>
-    </GoogleOAuthProvider>
   );
 }
 

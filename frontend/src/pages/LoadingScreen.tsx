@@ -1,9 +1,17 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const Loader = () => {
+interface LoaderProps {
+  /** Duration in seconds for the drive animation. 
+   *  Pass a small number (e.g. 1) for a fast drive, larger (e.g. 6) for a slow drive.
+   *  Default is 4 (keeps previous behavior).
+   */
+  duration?: number;
+}
+
+const Loader: React.FC<LoaderProps> = ({ duration = 4 }) => {
   return (
-    <StyledWrapper>
+    <StyledWrapper style={{ ['--drive-duration' as any]: `${duration}s` }}>
       <div className="loader">
         <div className="scene">
           {/* Yellow Car from HTML */}
@@ -40,6 +48,7 @@ const Loader = () => {
 }
 
 const StyledWrapper = styled.div`
+  /* drive duration controlled by CSS variable --drive-duration (e.g. "2s", "4s") */
   .loader {
     width: 100%;
     height: 100%;
@@ -64,7 +73,8 @@ const StyledWrapper = styled.div`
     position: absolute;
     left: -120px;
     bottom: 20px;
-    animation: driveToParking 4s ease-in-out infinite;
+    /* use CSS variable --drive-duration to allow dynamic speed control from React */
+    animation: driveToParking var(--drive-duration, 4s) ease-in-out forwards;
     z-index: 10;
   }
 
@@ -97,11 +107,12 @@ const StyledWrapper = styled.div`
     pointer-events: none;
   }
 
+  /* wheel spin derives from drive duration so wheel speed matches car speed */
   .frontWheel, .backWheel {
     position: absolute;
     width: 18px;
     height: 18px;
-    animation: wheelSpin 0.3s linear infinite;
+    animation: wheelSpin calc(var(--drive-duration, 4s) * 0.075) linear infinite;
   }
 
   .frontWheel {
@@ -166,7 +177,7 @@ const StyledWrapper = styled.div`
     border-radius: 50%;
     transform: translateX(-50%);
     filter: blur(3px);
-    animation: enhancedCarShadow 4s ease-in-out infinite;
+    animation: enhancedCarShadow var(--drive-duration, 4s) ease-in-out forwards;
   }
 
   @keyframes enhancedCarShadow {
@@ -282,7 +293,8 @@ const StyledWrapper = styled.div`
     width: 15px;
     height: 2px;
     background: #F1F5F9;
-    animation: roadMove 1.5s linear infinite;
+    /* road animation scales with drive duration so it visually matches speed */
+    animation: roadMove calc(var(--drive-duration, 4s) * 0.375) linear infinite;
   }
 
   .roadMark:nth-child(1) { animation-delay: 0s; }
