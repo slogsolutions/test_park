@@ -333,12 +333,12 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    if (!user.isVerified) {
-      return res.status(401).json({ 
-        message: 'Please verify your email before logging in',
-        needsVerification: true 
-      });
-    }
+    // if (!user.isVerified) {
+    //   return res.status(401).json({ 
+    //     message: 'Please verify your email before logging in',
+    //     needsVerification: true 
+    //   });
+    // }
 
     const token = generateToken(user._id);
 
