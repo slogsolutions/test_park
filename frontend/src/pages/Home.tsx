@@ -81,16 +81,15 @@ export default function Home() {
   // --------------------------------------------
 
   // ---------- only-approve helper ----------
-  // ---------- only-approve helper ----------
-const onlyApproved = (spaces: any[] | undefined | null) => {
-  if (!Array.isArray(spaces)) return [];
-  return spaces.filter((s) => {
-    const status = String(s?.status || '').toLowerCase();
-    // require explicit isOnline === true (be strict — if missing or false, treat as offline)
-    const online = typeof s?.isOnline !== 'undefined' ? Boolean(s.isOnline) : false;
-    return status === 'submitted' && online;
-  });
-};
+  const onlyApproved = (spaces: any[] | undefined | null) => {
+    if (!Array.isArray(spaces)) return [];
+    return spaces.filter((s) => {
+      const status = String(s?.status || '').toLowerCase();
+      // require explicit isOnline === true (be strict — if missing or false, treat as offline)
+      const online = typeof s?.isOnline !== 'undefined' ? Boolean(s.isOnline) : false;
+      return status === 'submitted' && online;
+    });
+  };
 
   // -------------------------------------------------------------
 
@@ -382,11 +381,14 @@ const onlyApproved = (spaces: any[] | undefined | null) => {
     setSelectedSpace(space);
     if (popupTimeout) clearTimeout(popupTimeout);
 
+    // Center map on marker but DO NOT force a very large zoom.
+    // This keeps the user's current zoom level (no jump).
     setViewport((prev) => ({
       ...prev,
       latitude: space.location.coordinates[1],
       longitude: space.location.coordinates[0],
-      zoom: Math.max(prev.zoom ?? 16, 20),
+      // removed forced Math.max(prev.zoom ?? 16, 20) to avoid extreme zoom
+      // keeping zoom unchanged preserves the current map view.
     }));
 
     if (currentLocation) {
