@@ -23,13 +23,15 @@ import { startBookingCompletionCron } from './cronjob.js';
 import userTokensRouter from "./routes/userTokenRoutes.js"
 
 // Load .env from server/ folder explicitly so running from project root still works
-const envPath = path.resolve(process.cwd(), 'server', '.env');
-const result = dotenv.config({ path: envPath });
-if (result.error) {
-  console.warn(`Warning: could not load env file at ${envPath}. Make sure server/.env exists.`);
-} else {
-  console.log(`Loaded env from: ${envPath}`);
-}
+// const envPath = path.resolve(process.cwd(), 'server', '.env');
+// const result = dotenv.config({ path: envPath });
+// if (result.error) {
+//   console.warn(`Warning: could not load env file at ${envPath}. Make sure server/.env exists.`);
+// } else {
+//   console.log(`Loaded env from: ${envPath}`);
+// }
+
+dotenv.config();
 
 // Basic runtime checks (non-sensitive logging)
 const hasMongo = !!process.env.MONGODB_URI;
