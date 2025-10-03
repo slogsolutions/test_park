@@ -2,6 +2,57 @@
 import mongoose from 'mongoose';
 import ParkingSpace from '../models/ParkingSpace.js';
 
+/**
+ * Helper to make accessible photo URL from multer file object or stored filename.
+ * - If file has .path and it's already a web-accessible path, use that.
+ * - Otherwise, if filename is provided, construct URL using request host (done in endpoints
+ *   where `req` is available) or fallback to '/uploads/<filename>'.
+ *
+ * Note: For endpoints that only have parkingSpace object (not the original req.files),
+ * we normalize existing photo strings into full URLs using server host info when available.
+ */
+function makePhotoUrlFromFile(req, file) {
+  // If multer provided path that is already usable (e.g., '/uploads/xxx' or full path), prefer it.
+  if (file.path) {
+    // If file.path is absolute filesystem path (contains drive letter or starts with '/mnt' etc),
+    // we will prefer file.filename to build a public URL.
+    // If file.path already looks like a URL path (starts with '/' or 'http'), use it.
+    if (typeof file.path === 'string' && (file.path.startsWith('/') || file.path.startsWith('http'))) {
+      // If it is absolute fs path that starts with '/', still better construct using filename below.
+      // Heuristic: if path contains 'uploads' and not '/mnt', use it
+      if (file.path.includes('/uploads/') && !file.path.startsWith('/mnt')) {
+        return (file.path.startsWith('http') ? file.path : `${req.protocol}://${req.get('host')}${file.path}`);
+      }
+    }
+  }
+
+  // If multer provides filename, construct an uploads URL
+  if (file.filename) {
+    return `${req.protocol}://${req.get('host')}/uploads/${file.filename}`;
+  }
+
+  // Fallback: if only file.path present but not a nice web path, try to use its basename
+  if (file.path) {
+    const parts = file.path.split(/[\\/]/);
+    const filename = parts[parts.length - 1];
+    return `${req.protocol}://${req.get('host')}/uploads/${filename}`;
+  }
+
+  // As absolute fallback
+  return null;
+}
+
+function makePhotoUrlFromString(req, photoStr) {
+  if (!photoStr) return photoStr;
+  if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) return photoStr;
+  if (photoStr.startsWith('/')) {
+    // relative path on server
+    return `${req.protocol}://${req.get('host')}${photoStr}`;
+  }
+  // assume filename stored, build from /uploads/
+  return `${req.protocol}://${req.get('host')}/uploads/${photoStr}`;
+}
+
 export const registerParkingSpace = async (req, res) => {
   if (!req.user) {
     return res.status(401).json({ message: 'User not authenticated' });
@@ -90,7 +141,11 @@ export const registerParkingSpace = async (req, res) => {
     const photos = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        photos.push(file.filename); // or file.path depending on your multer config
+        // prefer building full URL for frontend
+        const url = makePhotoUrlFromFile(req, file);
+        if (url) photos.push(url);
+        else if (file.filename) photos.push(`/uploads/${file.filename}`);
+        else if (file.path) photos.push(file.path);
       }
     }
 
@@ -144,9 +199,21 @@ export const registerParkingSpace = async (req, res) => {
     console.log('registered parking space details', parkingSpace);
 
     await parkingSpace.save();
+
+    // ensure returned object has full photo URLs (in case model modified them)
+    const parkingObj = parkingSpace.toObject();
+    if (Array.isArray(parkingObj.photos)) {
+      parkingObj.photos = parkingObj.photos.map((p) => {
+        if (!p) return p;
+        if (p.startsWith('http://') || p.startsWith('https://')) return p;
+        if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+        return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+      });
+    }
+
     res
       .status(201)
-      .json({ message: 'Parking space registered successfully!', data: parkingSpace });
+      .json({ message: 'Parking space registered successfully!', data: parkingObj });
   } catch (error) {
     console.error('Error registering parking space:', error.message);
     res
@@ -201,7 +268,18 @@ export const updateParkingSpace = async (req, res) => {
       { new: true }
     );
 
-    res.json(updatedSpace);
+    // normalize photo URLs before sending
+    const updatedObj = updatedSpace ? updatedSpace.toObject() : null;
+    if (updatedObj && Array.isArray(updatedObj.photos)) {
+      updatedObj.photos = updatedObj.photos.map((p) => {
+        if (!p) return p;
+        if (p.startsWith('http://') || p.startsWith('https://')) return p;
+        if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+        return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+      });
+    }
+
+    res.json(updatedObj);
   } catch (error) {
     console.log(error);
 
@@ -239,7 +317,18 @@ export const setOnlineStatus = async (req, res) => {
     parkingSpace.isOnline = isOnline;
     await parkingSpace.save();
 
-    return res.json({ message: 'Status updated', parkingSpace });
+    // Normalize photos for response
+    const psObj = parkingSpace.toObject();
+    if (Array.isArray(psObj.photos)) {
+      psObj.photos = psObj.photos.map((p) => {
+        if (!p) return p;
+        if (p.startsWith('http://') || p.startsWith('https://')) return p;
+        if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+        return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+      });
+    }
+
+    return res.json({ message: 'Status updated', parkingSpace: psObj });
   } catch (error) {
     console.error('Error setting online status', error);
     return res.status(500).json({ message: 'Failed to set online status' });
@@ -291,7 +380,21 @@ export const getParkingSpaces = async (req, res) => {
       .populate('owner', 'name')
       .sort('-createdAt');
 
-    res.json(parkingSpaces);
+    // Normalize photos to full URLs for frontend
+    const normalized = parkingSpaces.map(ps => {
+      const obj = ps.toObject();
+      if (Array.isArray(obj.photos)) {
+        obj.photos = obj.photos.map((p) => {
+          if (!p) return p;
+          if (p.startsWith('http://') || p.startsWith('https://')) return p;
+          if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+          return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+        });
+      }
+      return obj;
+    });
+
+    res.json(normalized);
   } catch (error) {
     console.error('Error fetching parking spaces:', error.message);
     res.status(500).json({ message: 'Failed to get parking spaces' });
@@ -307,7 +410,18 @@ export const getParkingSpaceById = async (req, res) => {
     if (!parkingSpace || parkingSpace.isDeleted) {
       return res.status(404).json({ message: 'Parking space not found' });
     }
-    res.json(parkingSpace);
+
+    const obj = parkingSpace.toObject();
+    if (Array.isArray(obj.photos)) {
+      obj.photos = obj.photos.map((p) => {
+        if (!p) return p;
+        if (p.startsWith('http://') || p.startsWith('https://')) return p;
+        if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+        return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+      });
+    }
+
+    res.json(obj);
   } catch (error) {
     res.status(500).json({ message: 'Failed to get parking space' });
   }
@@ -318,7 +432,21 @@ export const getMyParkingSpaces = async (req, res) => {
     const parkingSpaces = await ParkingSpace.find({ owner: req.user._id, isDeleted: { $ne: true } }).sort(
       '-createdAt'
     );
-    res.json(parkingSpaces);
+
+    const normalized = parkingSpaces.map(ps => {
+      const obj = ps.toObject();
+      if (Array.isArray(obj.photos)) {
+        obj.photos = obj.photos.map((p) => {
+          if (!p) return p;
+          if (p.startsWith('http://') || p.startsWith('https://')) return p;
+          if (p.startsWith('/')) return `${req.protocol}://${req.get('host')}${p}`;
+          return `${req.protocol}://${req.get('host')}/uploads/${p}`;
+        });
+      }
+      return obj;
+    });
+
+    res.json(normalized);
   } catch (error) {
     res.status(500).json({ message: 'Failed to get your parking spaces' });
   }
