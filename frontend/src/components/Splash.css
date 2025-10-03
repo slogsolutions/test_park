@@ -1,0 +1,36 @@
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: #ffffff; /* change to #000 for black bg */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.4s ease;
+}
+
+.splash-logo {
+  width: 200px;
+  height: auto;
+  animation: zoomFade 2.5s ease-in-out infinite;
+}
+
+@keyframes zoomFade {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.7;
+  }
+}
+
+.splash-screen.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
