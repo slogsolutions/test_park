@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bike, Car, PlusCircle, Check, Clock, Calendar, Shield, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Bike, Car, PlusCircle, Check, Clock, Calendar, Shield, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import LoadingScreen from './LoadingScreen';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -18,8 +18,39 @@ export default function VehicleDetails() {
   const [showTerms, setShowTerms] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
+  const [showStartTimeDropdown, setShowStartTimeDropdown] = useState(false);
+  const [showEndTimeDropdown, setShowEndTimeDropdown] = useState(false);
 
   const { spaceId, userId } = location.state || {};
+
+  // Generate time slots from 00:00 to 23:30 in 30-minute intervals
+  const generateTimeSlots = (forDate: Date | null, isStartTime: boolean) => {
+    const slots = [];
+    const now = new Date();
+    
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute += 30) {
+        const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        // Create a date object for this time slot
+        const slotDate = forDate ? new Date(forDate) : new Date();
+        slotDate.setHours(hour, minute, 0, 0);
+        
+        // For start time, disable past times
+        if (isStartTime && slotDate < now) {
+          continue;
+        }
+        
+        // For end time, disable times before start time
+        if (!isStartTime && manualStartTime && slotDate <= manualStartTime) {
+          continue;
+        }
+        
+        slots.push(timeString);
+      }
+    }
+    return slots;
+  };
 
   useEffect(() => {
     const fetchVehicles = async () => {
@@ -101,7 +132,14 @@ export default function VehicleDetails() {
     } else if (manualEndTime <= manualStartTime!) {
       errors.endTime = 'End time must be after start time';
     }
-
+     const phoneNumber = selectedVehicle?.contactNumber || '';
+  const cleanPhoneNumber = phoneNumber.replace(/\D/g, ''); // Remove all non-digits
+  
+  if (!phoneNumber) {
+    errors.phoneNumber = 'Contact number is required';
+  } else if (!/^\d{10}$/.test(cleanPhoneNumber)) {
+    errors.phoneNumber = 'Please enter exactly 10 digit phone number';
+  }
     if (!acceptedTerms) {
       errors.terms = 'You must accept the terms and conditions';
     }
@@ -200,6 +238,117 @@ export default function VehicleDetails() {
     } else {
       navigate(-1);
     }
+  };
+
+  // Helper function to format time for display
+  const formatTimeDisplay = (date: Date | null) => {
+    if (!date) return 'Select time';
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  // Helper function to set time on a date
+  const setTimeOnDate = (date: Date | null, timeString: string, isStartTime: boolean) => {
+    const [hours, minutes] = timeString.split(':').map(Number);
+    
+    if (!date) {
+      const newDate = new Date();
+      newDate.setHours(hours, minutes, 0, 0);
+      
+      // If setting start time and the time is in past, set to current time rounded to next 30 minutes
+      if (isStartTime && newDate < new Date()) {
+        const now = new Date();
+        const currentMinutes = now.getMinutes();
+        const roundedMinutes = currentMinutes < 30 ? 30 : 60;
+        now.setMinutes(roundedMinutes, 0, 0);
+        if (roundedMinutes === 60) {
+          now.setHours(now.getHours() + 1, 0, 0, 0);
+        }
+        return now;
+      }
+      
+      return newDate;
+    }
+    
+    const newDate = new Date(date);
+    newDate.setHours(hours, minutes, 0, 0);
+    
+    // Validate start time isn't in past
+    if (isStartTime && newDate < new Date()) {
+      const now = new Date();
+      const currentMinutes = now.getMinutes();
+      const roundedMinutes = currentMinutes < 30 ? 30 : 60;
+      now.setMinutes(roundedMinutes, 0, 0);
+      if (roundedMinutes === 60) {
+        now.setHours(now.getHours() + 1, 0, 0, 0);
+      }
+      return now;
+    }
+    
+    return newDate;
+  };
+
+  // Handle date change for start time
+  const handleStartDateChange = (date: Date | null) => {
+    if (date) {
+      // If we have an existing time, preserve it
+      if (manualStartTime) {
+        const newDate = new Date(date);
+        newDate.setHours(manualStartTime.getHours(), manualStartTime.getMinutes(), 0, 0);
+        
+        // If the combined date-time is in past, set to current time
+        if (newDate < new Date()) {
+          const now = new Date();
+          newDate.setHours(now.getHours(), now.getMinutes(), 0, 0);
+        }
+        
+        setManualStartTime(newDate);
+      } else {
+        // If no time set, set to current time rounded up
+        const now = new Date();
+        const currentMinutes = now.getMinutes();
+        const roundedMinutes = currentMinutes < 30 ? 30 : 60;
+        now.setMinutes(roundedMinutes, 0, 0);
+        if (roundedMinutes === 60) {
+          now.setHours(now.getHours() + 1, 0, 0, 0);
+        }
+        setManualStartTime(now);
+      }
+    } else {
+      setManualStartTime(null);
+    }
+    setFormErrors({...formErrors, startTime: ''});
+    setShowStartTimeDropdown(false);
+  };
+
+  // Handle date change for end time
+  const handleEndDateChange = (date: Date | null) => {
+    if (date) {
+      // If we have an existing time, preserve it
+      if (manualEndTime) {
+        const newDate = new Date(date);
+        newDate.setHours(manualEndTime.getHours(), manualEndTime.getMinutes(), 0, 0);
+        setManualEndTime(newDate);
+      } else {
+        // If no time set, set to same time as start or default
+        if (manualStartTime) {
+          const newDate = new Date(date);
+          newDate.setHours(manualStartTime.getHours(), manualStartTime.getMinutes(), 0, 0);
+          // Add minimum 1 hour if same date
+          if (newDate <= manualStartTime) {
+            newDate.setHours(manualStartTime.getHours() + 1);
+          }
+          setManualEndTime(newDate);
+        }
+      }
+    } else {
+      setManualEndTime(null);
+    }
+    setFormErrors({...formErrors, endTime: ''});
+    setShowEndTimeDropdown(false);
   };
 
   if (loading) {
@@ -358,24 +507,67 @@ export default function VehicleDetails() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Start Time *
                       </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={manualStartTime}
-                          onChange={(date) => {
-                            setManualStartTime(date);
-                            setFormErrors({...formErrors, startTime: ''});
-                          }}
-                          showTimeSelect
-                          timeFormat="HH:mm"
-                          timeIntervals={30}
-                          dateFormat="MMMM d, yyyy h:mm aa"
-                          minDate={new Date()}
-                          placeholderText="Select start date & time"
-                          className={`w-full p-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
-                            formErrors.startTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
-                          }`}
-                        />
-                        <Calendar className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+                      <div className="space-y-3">
+                        {/* Date Picker */}
+                        <div className="relative">
+                          <DatePicker
+                            selected={manualStartTime}
+                            onChange={handleStartDateChange}
+                            minDate={new Date()}
+                            placeholderText="Select start date"
+                            className={`w-full p-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
+                              formErrors.startTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
+                            }`}
+                            dateFormat="MMMM d, yyyy"
+                          />
+                          <Calendar className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+                        </div>
+                        
+                        {/* Time Picker */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowStartTimeDropdown(!showStartTimeDropdown);
+                              setShowEndTimeDropdown(false);
+                            }}
+                            className={`w-full p-3 border rounded-xl text-left focus:ring-2 focus:border-transparent transition-all flex justify-between items-center ${
+                              formErrors.startTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
+                            } ${!manualStartTime ? 'text-gray-500' : 'text-gray-900'}`}
+                          >
+                            <span>{formatTimeDisplay(manualStartTime)}</span>
+                            {showStartTimeDropdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          
+                          {showStartTimeDropdown && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                              <div className="p-2 grid grid-cols-2 gap-1">
+                                {generateTimeSlots(manualStartTime, true).map((time) => (
+                                  <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => {
+                                      const newDate = setTimeOnDate(manualStartTime, time, true);
+                                      setManualStartTime(newDate);
+                                      setShowStartTimeDropdown(false);
+                                      setFormErrors({...formErrors, startTime: ''});
+                                      
+                                      // Auto-adjust end time if needed
+                                      if (manualEndTime && newDate >= manualEndTime) {
+                                        const newEndDate = new Date(newDate);
+                                        newEndDate.setHours(newEndDate.getHours() + 1);
+                                        setManualEndTime(newEndDate);
+                                      }
+                                    }}
+                                    className="p-2 text-sm hover:bg-red-50 rounded-lg transition-colors text-center"
+                                  >
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       {formErrors.startTime && (
                         <p className="text-red-500 text-sm mt-1 flex items-center">
@@ -390,24 +582,60 @@ export default function VehicleDetails() {
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         End Time *
                       </label>
-                      <div className="relative">
-                        <DatePicker
-                          selected={manualEndTime}
-                          onChange={(date) => {
-                            setManualEndTime(date);
-                            setFormErrors({...formErrors, endTime: ''});
-                          }}
-                          showTimeSelect
-                          timeFormat="HH:mm"
-                          timeIntervals={30}
-                          dateFormat="MMMM d, yyyy h:mm aa"
-                          minDate={manualStartTime || new Date()}
-                          placeholderText="Select end date & time"
-                          className={`w-full p-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
-                            formErrors.endTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
-                          }`}
-                        />
-                        <Calendar className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+                      <div className="space-y-3">
+                        {/* Date Picker */}
+                        <div className="relative">
+                          <DatePicker
+                            selected={manualEndTime}
+                            onChange={handleEndDateChange}
+                            minDate={manualStartTime || new Date()}
+                            placeholderText="Select end date"
+                            className={`w-full p-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
+                              formErrors.endTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
+                            }`}
+                            dateFormat="MMMM d, yyyy"
+                          />
+                          <Calendar className="absolute right-3 top-3 w-5 h-5 text-gray-400" />
+                        </div>
+                        
+                        {/* Time Picker */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowEndTimeDropdown(!showEndTimeDropdown);
+                              setShowStartTimeDropdown(false);
+                            }}
+                            className={`w-full p-3 border rounded-xl text-left focus:ring-2 focus:border-transparent transition-all flex justify-between items-center ${
+                              formErrors.endTime ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
+                            } ${!manualEndTime ? 'text-gray-500' : 'text-gray-900'}`}
+                          >
+                            <span>{formatTimeDisplay(manualEndTime)}</span>
+                            {showEndTimeDropdown ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </button>
+                          
+                          {showEndTimeDropdown && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                              <div className="p-2 grid grid-cols-2 gap-1">
+                                {generateTimeSlots(manualEndTime, false).map((time) => (
+                                  <button
+                                    key={time}
+                                    type="button"
+                                    onClick={() => {
+                                      const newDate = setTimeOnDate(manualEndTime, time, false);
+                                      setManualEndTime(newDate);
+                                      setShowEndTimeDropdown(false);
+                                      setFormErrors({...formErrors, endTime: ''});
+                                    }}
+                                    className="p-2 text-sm hover:bg-red-50 rounded-lg transition-colors text-center"
+                                  >
+                                    {time}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
                       {formErrors.endTime && (
                         <p className="text-red-500 text-sm mt-1 flex items-center">
@@ -417,6 +645,20 @@ export default function VehicleDetails() {
                       )}
                     </div>
                   </div>
+
+                  {/* Selected Time Display */}
+                  {(manualStartTime || manualEndTime) && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                      <p className="text-sm text-blue-800 font-medium">
+                        Selected Parking Duration:
+                      </p>
+                      <p className="text-sm text-blue-700">
+                        {manualStartTime ? manualStartTime.toLocaleString() : 'Not set'} 
+                        {' → '} 
+                        {manualEndTime ? manualEndTime.toLocaleString() : 'Not set'}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 {/* Vehicle Details Section */}
@@ -467,16 +709,48 @@ export default function VehicleDetails() {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Contact Number
-                      </label>
-                      <input
-                        type="tel"
-                        defaultValue={selectedVehicle.contactNumber}
-                        className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-gray-600"
-                      />
-                    </div>
+<div>
+  <label className="block text-sm font-semibold text-gray-700 mb-2">
+    Contact Number *
+  </label>
+  <input
+    type="tel"
+    value={selectedVehicle.contactNumber || ''}
+    maxLength={10}
+    inputMode="numeric"
+    placeholder="Enter 10 digit number"
+    className={`w-full p-3 border rounded-xl focus:ring-2 focus:border-transparent transition-all ${
+      formErrors.phoneNumber ? 'border-red-500 focus:ring-red-200' : 'border-gray-300 focus:ring-red-300'
+    }`}
+    onChange={(e) => {
+      // Only allow numbers and limit to 10 digits
+      const numbersOnly = e.target.value.replace(/\D/g, '').slice(0, 10);
+      
+      // Update the contact number in selectedVehicle
+      setSelectedVehicle({
+        ...selectedVehicle,
+        contactNumber: numbersOnly
+      });
+      
+      // Clear error when user starts typing
+      if (formErrors.phoneNumber) {
+        setFormErrors({...formErrors, phoneNumber: ''});
+      }
+    }}
+    onKeyPress={(e) => {
+      // Prevent non-numeric characters
+      if (!/[0-9]/.test(e.key)) {
+        e.preventDefault();
+      }
+    }}
+  />
+  {formErrors.phoneNumber && (
+    <p className="text-red-500 text-sm mt-1 flex items-center">
+      <AlertCircle className="w-4 h-4 mr-1" />
+      {formErrors.phoneNumber}
+    </p>
+  )}
+</div>
 
                     <div className="md:col-span-2">
                       <label className="block text-sm font-semibold text-gray-700 mb-2">

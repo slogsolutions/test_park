@@ -75,6 +75,9 @@ app.use(
 
 // Use JSON parser for application/json bodies
 app.use(express.json());
+const uploadsPath = path.join(process.cwd(), 'uploads');
+// ensure uploads are accessible at http(s)://<HOST>/uploads/<filename>
+app.use('/uploads', express.static(uploadsPath));
 app.use("/api/users", userTokensRouter);
 app.use('/api/auth', authRoutes);
 app.use('/api/kyc', kycRoutes);

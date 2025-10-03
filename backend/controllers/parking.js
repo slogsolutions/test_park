@@ -1,6 +1,10 @@
 // controllers/parking.js
 import mongoose from 'mongoose';
 import ParkingSpace from '../models/ParkingSpace.js';
+import cloudinary from '../config/cloudinary.js';
+import streamifier from 'streamifier';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Helper to make accessible photo URL from multer file object or stored filename.
@@ -51,6 +55,50 @@ function makePhotoUrlFromString(req, photoStr) {
   }
   // assume filename stored, build from /uploads/
   return `${req.protocol}://${req.get('host')}/uploads/${photoStr}`;
+}
+
+/**
+ * Upload a Buffer to Cloudinary using upload_stream.
+ * Returns result object from Cloudinary (contains secure_url).
+ */
+function uploadBufferToCloudinary(buffer, originalName, folder) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      folder: folder || process.env.CLOUDINARY_UPLOAD_FOLDER || 'aparkfinder/parking',
+      public_id: originalName ? originalName.replace(/\.[^/.]+$/, '') + '-' + Date.now() : undefined,
+      overwrite: false,
+      resource_type: 'image',
+      transformation: [{ quality: 'auto' }, { fetch_format: 'auto' }],
+    };
+
+    const uploadStream = cloudinary.uploader.upload_stream(opts, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
+    });
+
+    streamifier.createReadStream(buffer).pipe(uploadStream);
+  });
+}
+
+/**
+ * Upload a file by local path to Cloudinary.
+ * Returns result object from Cloudinary (contains secure_url).
+ */
+function uploadFilePathToCloudinary(filePath, originalName, folder) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      folder: folder || process.env.CLOUDINARY_UPLOAD_FOLDER || 'aparkfinder/parking',
+      public_id: originalName ? originalName.replace(/\.[^/.]+$/, '') + '-' + Date.now() : undefined,
+      overwrite: false,
+      resource_type: 'image',
+      transformation: [{ quality: 'auto' }, { fetch_format: 'auto' }],
+    };
+
+    cloudinary.uploader.upload(filePath, opts, (error, result) => {
+      if (error) return reject(error);
+      resolve(result);
+    });
+  });
 }
 
 export const registerParkingSpace = async (req, res) => {
@@ -141,7 +189,53 @@ export const registerParkingSpace = async (req, res) => {
     const photos = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        // prefer building full URL for frontend
+        // If multer provided buffer (memoryStorage), upload to Cloudinary
+        if (file.buffer) {
+          try {
+            const result = await uploadBufferToCloudinary(file.buffer, file.originalname, process.env.CLOUDINARY_UPLOAD_FOLDER);
+            if (result && result.secure_url) {
+              photos.push(result.secure_url);
+              continue;
+            } else if (result && result.url) {
+              photos.push(result.url);
+              continue;
+            }
+          } catch (err) {
+            console.error('Cloudinary upload failed for', file.originalname, err);
+            // fall through to try existing heuristics below
+          }
+        }
+
+        // If multer wrote file to disk (diskStorage), try uploading that path
+        if (file.path) {
+          try {
+            const result = await uploadFilePathToCloudinary(file.path, file.originalname, process.env.CLOUDINARY_UPLOAD_FOLDER);
+            if (result && result.secure_url) {
+              photos.push(result.secure_url);
+              // attempt to remove local file after successful upload (best-effort)
+              try {
+                fs.unlinkSync(file.path);
+              } catch (rmErr) {
+                // non-fatal
+                console.warn('Failed to remove local temp file', file.path, rmErr);
+              }
+              continue;
+            } else if (result && result.url) {
+              photos.push(result.url);
+              try {
+                fs.unlinkSync(file.path);
+              } catch (rmErr) {
+                console.warn('Failed to remove local temp file', file.path, rmErr);
+              }
+              continue;
+            }
+          } catch (err) {
+            console.error('Cloudinary upload from path failed for', file.path, err);
+            // fall through to existing heuristics
+          }
+        }
+
+        // prefer building full URL for frontend using existing heuristics
         const url = makePhotoUrlFromFile(req, file);
         if (url) photos.push(url);
         else if (file.filename) photos.push(`/uploads/${file.filename}`);
@@ -260,6 +354,63 @@ export const updateParkingSpace = async (req, res) => {
 
     if (parkingSpace.owner.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Not authorized' });
+    }
+
+    // If new files uploaded, upload them to Cloudinary and append to existing photos
+    if (req.files && req.files.length > 0) {
+      const newPhotos = [];
+      for (const file of req.files) {
+        if (file.buffer) {
+          try {
+            const result = await uploadBufferToCloudinary(file.buffer, file.originalname, process.env.CLOUDINARY_UPLOAD_FOLDER);
+            if (result && result.secure_url) {
+              newPhotos.push(result.secure_url);
+              continue;
+            } else if (result && result.url) {
+              newPhotos.push(result.url);
+              continue;
+            }
+          } catch (err) {
+            console.error('Cloudinary upload failed for update:', file.originalname, err);
+            // fall through to existing heuristics
+          }
+        }
+
+        if (file.path) {
+          try {
+            const result = await uploadFilePathToCloudinary(file.path, file.originalname, process.env.CLOUDINARY_UPLOAD_FOLDER);
+            if (result && result.secure_url) {
+              newPhotos.push(result.secure_url);
+              try {
+                fs.unlinkSync(file.path);
+              } catch (rmErr) {
+                console.warn('Failed to remove local temp file', file.path, rmErr);
+              }
+              continue;
+            } else if (result && result.url) {
+              newPhotos.push(result.url);
+              try {
+                fs.unlinkSync(file.path);
+              } catch (rmErr) {
+                console.warn('Failed to remove local temp file', file.path, rmErr);
+              }
+              continue;
+            }
+          } catch (err) {
+            console.error('Cloudinary upload from path failed for update:', file.path, err);
+            // fall through to heuristics
+          }
+        }
+
+        const url = makePhotoUrlFromFile(req, file);
+        if (url) newPhotos.push(url);
+        else if (file.filename) newPhotos.push(`/uploads/${file.filename}`);
+        else if (file.path) newPhotos.push(file.path);
+      }
+
+      // merge with any existing photos (keeping existing ones)
+      const existingPhotos = Array.isArray(parkingSpace.photos) ? parkingSpace.photos : [];
+      req.body.photos = [...existingPhotos, ...newPhotos];
     }
 
     const updatedSpace = await ParkingSpace.findByIdAndUpdate(

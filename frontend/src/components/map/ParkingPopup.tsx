@@ -54,23 +54,42 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   // - space.photos as array of strings (either filenames like "abc.jpg" or full URLs),
   // - space.photos as a single string,
   // - array of objects with { filename } or { path }.
-  const makeUrl = (p: any) => {
-    if (!p) return null;
-    if (typeof p === 'string') {
-      if (p.startsWith('http://') || p.startsWith('https://')) return p;
-      if (p.startsWith('/')) return `${window.location.origin}${p}`;
-      // assume filename stored in DB -> /uploads/<filename>
-      return `${window.location.origin}/uploads/${p}`;
+ // use the backend base URL set in .env (VITE_BASE_URL) or fallback to window.location.origin
+const API_BASE = (import.meta.env.VITE_BASE_URL?.replace(/\/$/, '') || window.location.origin);
+const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME?.trim(); // optional
+
+const makeUrl = (p: any) => {
+  if (!p) return null;
+  if (typeof p === 'string') {
+    // Already a full URL (including Cloudinary secure URLs)
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+
+    // Server-relative path like '/uploads/...' -> prefix backend base URL
+    if (p.startsWith('/')) return `${API_BASE}${p}`;
+
+    // If the string looks like a Cloudinary public id / path (contains folder or 'aparkfinder' etc)
+    // and we have CLOUD_NAME provided in frontend env, construct a Cloudinary URL:
+    // e.g. 'aparkfinder/parking/abc.jpg' -> https://res.cloudinary.com/<cloud>/image/upload/aparkfinder/parking/abc.jpg
+    // or 'aparkfinder/parking/abc' -> add no extension (Cloudinary serves it)
+    if (CLOUD_NAME && p.includes('/')) {
+      // Prevent accidentally turning filenames like 'myphoto.jpg' into cloud URLs unless DB actually stored folder paths.
+      // Heuristic: if it contains folder-like segment (a slash), treat as cloud public id/path.
+      return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${p}`;
     }
-    // if object from multer like { filename, path }
-    if (typeof p === 'object') {
-      if (p.url) return p.url;
-      if (p.path && (p.path.startsWith('http://') || p.path.startsWith('https://'))) return p.path;
-      if (p.path && p.path.startsWith('/')) return `${window.location.origin}${p.path}`;
-      if (p.filename) return `${window.location.origin}/uploads/${p.filename}`;
-    }
-    return null;
-  };
+
+    // assume filename stored in DB -> /uploads/<filename>
+    return `${API_BASE}/uploads/${p}`;
+  }
+  // if object from multer like { filename, path }
+  if (typeof p === 'object') {
+    if (p.url) return p.url;
+    if (p.path && (p.path.startsWith('http://') || p.path.startsWith('https://'))) return p.path;
+    if (p.path && p.path.startsWith('/')) return `${API_BASE}${p.path}`;
+    if (p.filename) return `${API_BASE}/uploads/${p.filename}`;
+  }
+  return null;
+};
+
 
   const rawPhotos = (space as any).photos;
   const images = Array.isArray(rawPhotos) && rawPhotos.length > 0
