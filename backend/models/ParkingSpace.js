@@ -93,7 +93,9 @@ const parkingSpaceSchema = new mongoose.Schema({
   availableSpots: {
     type: Number,
   },
-  photos: [String],
+  photos: [{
+  type: String
+}],
   rating: {
     type: Number,
     min: 0,

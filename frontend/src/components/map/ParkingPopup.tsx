@@ -49,14 +49,39 @@ export default function ParkingPopup({ space, onClose, onMouseEnter, onMouseLeav
   const hasDiscount = priceMeta.hasDiscount;
   const discountPercent = priceMeta.discountPercent;
 
-  // Create image array (support photos as array or single value)
-  const images = Array.isArray((space as any).photos) && (space as any).photos.length > 0
-    ? (space as any).photos
-    : (space as any).photos
-      ? [(space as any).photos]
+  // --- Photo handling: normalize to full URLs so <img src=...> always works ---
+  // Accepts:
+  // - space.photos as array of strings (either filenames like "abc.jpg" or full URLs),
+  // - space.photos as a single string,
+  // - array of objects with { filename } or { path }.
+  const makeUrl = (p: any) => {
+    if (!p) return null;
+    if (typeof p === 'string') {
+      if (p.startsWith('http://') || p.startsWith('https://')) return p;
+      if (p.startsWith('/')) return `${window.location.origin}${p}`;
+      // assume filename stored in DB -> /uploads/<filename>
+      return `${window.location.origin}/uploads/${p}`;
+    }
+    // if object from multer like { filename, path }
+    if (typeof p === 'object') {
+      if (p.url) return p.url;
+      if (p.path && (p.path.startsWith('http://') || p.path.startsWith('https://'))) return p.path;
+      if (p.path && p.path.startsWith('/')) return `${window.location.origin}${p.path}`;
+      if (p.filename) return `${window.location.origin}/uploads/${p.filename}`;
+    }
+    return null;
+  };
+
+  const rawPhotos = (space as any).photos;
+  const images = Array.isArray(rawPhotos) && rawPhotos.length > 0
+    ? rawPhotos.map(makeUrl).filter(Boolean)
+    : rawPhotos
+      ? [makeUrl(rawPhotos)].filter(Boolean)
       : [
           'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
         ];
+
+  // --- end photo handling ---
 
   const handleBookNow = (e: React.MouseEvent) => {
     e.stopPropagation();
