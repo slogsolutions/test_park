@@ -91,7 +91,7 @@ app.use('/api/booking', bookingRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use("/api/admin", adminRoutes);
-app.use('/captain', captainRoutes);
+app.use('/api/captain', captainRoutes);
 // Only initialize multer for routes that need multipart/form-data
 const upload = multer();
 

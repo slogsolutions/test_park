@@ -41,7 +41,6 @@ const userSchema = new mongoose.Schema({
   },
   isCaptain:
    { type: Boolean, default: false,
-
     },
   captainAreas:
    [{ type: String }],
