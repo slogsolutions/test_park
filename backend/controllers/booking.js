@@ -187,9 +187,14 @@ export const createBooking = async (req, res) => {
       return res.status(400).json({ message: 'Selected time slot is already booked' });
     }
 
-    // calculate total price
+    console.log(endTime , "endTime",startTime, "startTime");
     const durationHours = (new Date(endTime) - new Date(startTime)) / (1000 * 60 * 60);
+      console.log(durationHours ,"calculated by converting time");
+
+
     const totalPrice = durationHours * pricePerHour;
+    console.log(durationHours ,"durationHours", "priceHours",pricePerHour)
+      console.log(totalPrice ,"calculated totalPrice");
 
     // create booking: auto-accept and assign providerId so buyer can pay immediately
     const booking = new Booking({
