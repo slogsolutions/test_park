@@ -19,6 +19,15 @@ export const protect = async (req, res, next) => {
   }
   return res.status(401).json({ message: 'Not authorized, no token' });
 };
+// backend/middleware/auth.js
+export const captainOnly = (req, res, next) => {
+  // Two safe approaches:
+  // 1) If req.user comes from DB (protect middleware sets req.user), check req.user.isCaptain
+  if (req.user && req.user.isCaptain) {
+    return next();
+  }
+  return res.status(403).json({ message: 'Access denied, captain only' });
+};
 
 
 export const adminOnly = (req, res, next) => {

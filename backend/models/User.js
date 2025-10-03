@@ -39,6 +39,12 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isCaptain:
+   { type: Boolean, default: false,
+    },
+  captainAreas:
+   [{ type: String }],
+
   isAdmin: {
     type: Boolean,
     default: false,

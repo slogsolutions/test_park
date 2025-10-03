@@ -278,38 +278,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 };
 
   const setUser = (user: User | null) => {
-    if (user) {
-      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      setGlobalUserForRN(user);
-      sendUserToRN(user);
-    } else {
-      dispatch({ type: 'LOGOUT' });
-      setGlobalUserForRN(null);
-      sendUserToRN(null);
-    }
-  };
+  if (user) {
+    dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+    setGlobalUserForRN(user);
+    sendUserToRN(user);
+  } else {
+    dispatch({ type: 'LOGOUT' });
+    setGlobalUserForRN(null);
+    sendUserToRN(null);
+  }
+};
 
-  const refreshUser = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        dispatch({ type: 'LOGOUT' });
-        setGlobalUserForRN(null);
-        return;
-      }
-      const user = (await authService.getMe()) as any;
-      console.log('[WEB DEBUG] refreshUser getMe returned:', user);
-      dispatch({ type: 'LOGIN_SUCCESS', payload: user });
-      setGlobalUserForRN(user);
-      sendUserToRN(user);
-    } catch (error) {
-      console.error('refreshUser failed', error);
-      localStorage.removeItem('token');
+const refreshUser = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) {
       dispatch({ type: 'LOGOUT' });
       setGlobalUserForRN(null);
-      sendUserToRN(null);
+      return;
     }
-  };
+    const user = (await authService.getMe()) as any;
+    console.log('[WEB DEBUG] refreshUser getMe returned:', user);
+    dispatch({ type: 'LOGIN_SUCCESS', payload: user });
+    setGlobalUserForRN(user);
+    sendUserToRN(user);
+  } catch (error) {
+    console.error('refreshUser failed', error);
+    localStorage.removeItem('token');
+    dispatch({ type: 'LOGOUT' });
+    setGlobalUserForRN(null);
+    sendUserToRN(null);
+  }
+};
 
   return (
     <AuthContext.Provider
