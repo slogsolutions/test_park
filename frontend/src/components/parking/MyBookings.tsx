@@ -13,7 +13,6 @@ type Booking = {
   paymentStatus: string;
   totalPrice: number;
   priceParking?: number;
-  paid_amount?: number; // amount already paid (in paise recommended)
 };
 
 const MyBookings: React.FC = () => {
@@ -33,8 +32,6 @@ const MyBookings: React.FC = () => {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
           },
         });
-
-        // If backend returns paid_amount as rupees, convert? we assume paise (integer) — keep whatever backend sends.
         setBookings(response.data || []);
       } catch (err) {
         setError("Failed to fetch bookings");
@@ -95,25 +92,6 @@ const MyBookings: React.FC = () => {
     }
   };
 
-  // Add paid amount to server (recommended: amountInPaise integer)
-  // Backend should implement an endpoint that accepts amount (in paise) and updates the booking's paid_amount.
-  // Endpoint used: POST /api/booking/:bookingId/add-paid-amount  with body { amount: <paise integer> }
-  // Add paid amount (and optionally extend hours) to server
-  const addPaidAmountToServer = async (bookingId: string, amountInPaise: number, extendHours: number = 0) => {
-    try {
-      const token = localStorage.getItem("token");
-      const resp = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/api/booking/${bookingId}/add-paid-amount`,
-        { amount: amountInPaise, extendHours },
-        { headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" } }
-      );
-      return resp.data.booking; // backend returns updated booking
-    } catch (err) {
-      console.error("Failed to update paid amount on server", err);
-      throw err;
-    }
-  };
-
   // Helper: compute discount meta for a parkingSpace (keeps original logic)
   const computePriceMeta = (space: any) => {
     const baseRaw = space?.priceParking ?? space?.price ?? 0;
@@ -161,6 +139,7 @@ const MyBookings: React.FC = () => {
   };
 
   // Generic pay flow used for initial booking payment
+  // Replace your existing handlePayNow with this
   const handlePayNow = async (bookingId: string, amountInRupees: number) => {
     try {
       await loadRazorpayScript();
@@ -170,7 +149,7 @@ const MyBookings: React.FC = () => {
 
       const { data: paymentData } = await axios.post(
         `${import.meta.env.VITE_BASE_URL}/api/payment/initiate-payment`,
-        { bookingId, amount: amountInPaise }, // send integer paise
+        { bookingId, amount: amountInPaise, isPaise: true },
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -192,6 +171,8 @@ const MyBookings: React.FC = () => {
                 razorpay_order_id: paymentData.orderId,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
+                extend: false,        // or true for extensions
+                isPaise: true 
               },
               {
                 headers: {
@@ -200,31 +181,10 @@ const MyBookings: React.FC = () => {
               }
             );
 
-            // Payment verified — now tell backend to add paid amount
-            try {
-              const serverResp = await addPaidAmountToServer(bookingId, amountInPaise);
-              // If server returns updated booking, update state; otherwise increment local paid_amount
-              if (serverResp && serverResp._id) {
-                // assume serverResp is updated booking
-                setBookings((prev) => prev.map((b) => (b._id === bookingId ? serverResp : b)));
-              } else {
-                // fallback: increment paid_amount locally
-                setBookings((prev) =>
-                  prev.map((b) =>
-                    b._id === bookingId
-                      ? { ...b, paymentStatus: "paid", paid_amount: (b.paid_amount ?? 0) + amountInPaise }
-                      : b
-                  )
-                );
-              }
-            } catch (addPaidErr) {
-              // If updating paid amount fails, still mark paymentStatus as paid locally but notify user
-              console.error("addPaidAmountToServer failed:", addPaidErr);
-              setBookings((prev) => prev.map((b) => (b._id === bookingId ? { ...b, paymentStatus: "paid", paid_amount: (b.paid_amount ?? 0) + amountInPaise } : b)));
-              alert("Payment succeeded but failed to persist paid_amount on server. Please contact support if balance appears incorrect.");
-            }
-
             alert("Payment successful!");
+            setBookings((prevBookings) =>
+              prevBookings.map((b) => (b._id === bookingId ? { ...b, paymentStatus: "paid" } : b))
+            );
           } catch (e) {
             console.error(e);
             alert("Payment verification failed");
@@ -248,67 +208,108 @@ const MyBookings: React.FC = () => {
     }
   };
 
-  // Handle extend and pay (1 hour)
+  // Replace your existing handleExtendAndPay with this
   const handleExtendAndPay = async (booking: Booking) => {
-  try {
-    const totals = computeTotalsForBooking(booking);
-    const amountRupees = Number(totals.perHour || 0);
+    try {
+      // charge for one hour at per-hour rate (in rupees)
+      const totals = computeTotalsForBooking(booking);
+      const amountRupees = Number(totals.perHour || 0);
 
-    await loadRazorpayScript();
-    const amountInPaise = Math.round(amountRupees * 100);
+      await loadRazorpayScript();
 
-    const { data: paymentData } = await axios.post(
-      `${import.meta.env.VITE_BASE_URL}/api/payment/initiate-payment`,
-      { bookingId: booking._id, amount: amountInPaise, extend: true },
-      { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-    );
+      // convert rupees to paise (integer)
+      const amountInPaise = Math.round(amountRupees * 100);
 
-    const options = {
-      key: "rzp_test_eQoJ7XZxUf37D7",
-      amount: paymentData.amount,
-      currency: "INR",
-      order_id: paymentData.orderId,
-      handler: async (response: any) => {
-        try {
-          await axios.post(
-            `${import.meta.env.VITE_BASE_URL}/api/payment/verify-payment`,
-            {
-              bookingId: booking._id,
-              razorpay_order_id: paymentData.orderId,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            },
-            { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
-          );
+      // Pass extend flag - backend should accept it and interpret amount as paise
+      const { data: paymentData } = await axios.post(
+        `${import.meta.env.VITE_BASE_URL}/api/payment/initiate-payment`,
+        { bookingId: booking._id, amount: amountInPaise, extend: true, isPaise: true },
+        { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+      );
 
-          // ✅ Use new backend endpoint to add amount & extend
-          const updatedBooking = await addPaidAmountToServer(booking._id, amountInPaise, 1);
+      const options = {
+        key: "rzp_test_eQoJ7XZxUf37D7",
+        amount: paymentData.amount,
+        currency: "INR",
+        order_id: paymentData.orderId,
+        handler: async (response: any) => {
+          try {
+            await axios.post(
+              `${import.meta.env.VITE_BASE_URL}/api/payment/verify-payment`,
+              {
+                bookingId: booking._id,
+                razorpay_order_id: paymentData.orderId,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                extend: false,        // or true for extensions
+                isPaise: true  
+              },
+              { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }
+            );
 
-          setBookings((prev) => prev.map((b) => (b._id === booking._id ? updatedBooking : b)));
+            // Try to fetch refreshed booking from backend (backend ideally updates endTime)
+            const refreshedResp = await axios.get(`${import.meta.env.VITE_BASE_URL}/api/booking/${booking._id}`, {
+              headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+            });
 
-          alert("Extension paid and applied by 1 hour.");
+            let updatedBooking: Booking = refreshedResp.data;
 
-        } catch (e) {
-          console.error("Extension payment verification failed", e);
-          alert("Extension payment verification failed");
-        }
-      },
-      prefill: {
-        name: "Parking Space",
-        email: "customer@example.com",
-        contact: "9999999999",
-      },
-      theme: { color: "#FFC107" },
-    };
+            // If backend did not extend endTime, extend client-side by 1 hour from previous endTime
+            const originalEndTs = new Date(booking.endTime).getTime();
+            const refreshedEndTs = new Date(updatedBooking.endTime).getTime();
+            if (isNaN(refreshedEndTs) || refreshedEndTs <= originalEndTs) {
+              const newEnd = new Date(originalEndTs + 60 * 60 * 1000); // +1 hour
+              updatedBooking = { ...updatedBooking, endTime: newEnd.toISOString() };
+            }
 
-    const razorpay = new (window as any).Razorpay(options);
-    razorpay.open();
-  } catch (err) {
-    console.error("handleExtendAndPay error:", err);
-    alert("Failed to create extension payment. Please try again.");
-  }
-};
+            // Update bookings array with updated booking
+            setBookings((prev) => prev.map((b) => (b._id === booking._id ? updatedBooking : b)));
 
+            alert("Extension payment successful — booking extended by 1 hour.");
+
+            // Generate new OTP for the extended session, store it, and navigate to track
+            try {
+              const otpRes = await requestOTPFromServer(booking._id);
+              // expect { otp, expiresAt }
+              setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: otpRes.otp, expiresAt: otpRes.expiresAt } }));
+
+              // Navigate to tracking with OTP info
+              navigate("/track", {
+                state: {
+                  parkingSpace: updatedBooking.parkingSpace,
+                  otp: otpRes.otp,
+                  bookingId: booking._id,
+                  expiresAt: otpRes.expiresAt,
+                },
+              });
+            } catch (otpErr) {
+              console.error("Failed to generate OTP after extension", otpErr);
+              // OTP failure shouldn't break the main flow; inform user
+              alert("Extension applied but failed to generate OTP automatically. You can generate OTP from the booking card.");
+            }
+
+          } catch (e) {
+            console.error("Extension payment verification failed", e);
+            alert("Extension payment verification failed");
+          }
+        },
+        prefill: {
+          name: "Parking Space",
+          email: "customer@example.com",
+          contact: "9999999999",
+        },
+        theme: {
+          color: "#FFC107",
+        },
+      };
+
+      const razorpay = new (window as any).Razorpay(options);
+      razorpay.open();
+    } catch (err) {
+      console.error("handleExtendAndPay error:", err);
+      alert("Failed to create extension payment. Please try again.");
+    }
+  };
 
   // Generate OTP for completion (buyer action) and show it inline
   const handleGenerateOtpForCompletion = async (booking: Booking) => {
@@ -316,7 +317,7 @@ const MyBookings: React.FC = () => {
       const res = await requestOTPFromServer(booking._id);
       // expect { otp, expiresAt }
       setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: res.otp, expiresAt: res.expiresAt } }));
-      alert(`OTP generated: ${res.otp}\nGive this OTP to the seller to complete the booking.\nExpires at: ${res.expiresAt ?? "soon"}`);
+      // alert(`OTP generated: ${res.otp}\nGive this OTP to the seller to complete the booking.\nExpires at: ${res.expiresAt ?? "soon"}`);
     } catch (err) {
       console.error("Failed to generate OTP", err);
       alert("Failed to generate OTP. Try again.");
@@ -429,16 +430,6 @@ const MyBookings: React.FC = () => {
                       )}
                     </div>
                   </li>
-
-                  <li className="flex items-center">
-                    <span className="text-sm text-gray-500">Paid: </span>
-                    <span className="ml-2 font-medium">
-                      {/* show paid_amount (convert from paise to rupees if needed) */}
-                      {typeof booking.paid_amount === "number"
-                        ? `₹${(booking.paid_amount / 100).toFixed(2)}`
-                        : "₹0.00"}
-                    </span>
-                  </li>
                 </ul>
 
                 <div className="mt-4 flex flex-col gap-3">
@@ -470,7 +461,7 @@ const MyBookings: React.FC = () => {
                             onClick={() => handleGenerateOtpForCompletion(booking)}
                             className="bg-green-600 text-white font-semibold py-2 px-4 rounded-lg flex-1 hover:bg-green-700 transition"
                           >
-                            Complete
+                            Check Out
                           </button>
                           <button
                             onClick={() => handleTrackNow(booking)}
@@ -488,7 +479,7 @@ const MyBookings: React.FC = () => {
                             className="bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-lg flex-1 cursor-not-allowed"
                             title="Complete is disabled after end time; extend and pay to continue session"
                           >
-                            Complete (expired)
+                            Check Out Time over
                           </button>
 
                           <button

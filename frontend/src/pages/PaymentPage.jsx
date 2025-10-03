@@ -15,7 +15,7 @@ const PaymentPage = ({ booking }) => {
         },
         body: JSON.stringify({
           bookingId: booking._id,
-          amount: booking.totalPrice, // INR, backend multiplies to paise
+          amount: booking.totalPrice, isPaise: false // INR, backend multiplies to paise
         }),
       });
 
