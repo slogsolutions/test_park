@@ -121,10 +121,11 @@ approvedAt: { type: Date },
     },
   ],
   status: {
-    type: String,
-    enum: ["submitted", "pending"],
-    default: "pending",
-  },
+  type: String,
+  enum: ['submitted', 'pending', 'approved', 'rejected', 'active', 'inactive'],
+  default: 'pending',
+},
+
   createdAt: {
     type: Date,
     default: Date.now,
