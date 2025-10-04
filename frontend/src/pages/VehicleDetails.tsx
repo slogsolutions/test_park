@@ -861,8 +861,20 @@ export default function VehicleDetails() {
 
                 <section>
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">4. Cancellation and Refunds</h3>
-                  <p>Cancellations made more than 2 hours before the booking start time will receive a full refund. Late cancellations or no-shows may incur charges.</p>
+                  <p>
+                    Cancellations are subject to time-based refund rules:
+                  </p>
+                  <ul className="list-disc ml-6 mt-2 text-gray-700">
+                    <li>More than <strong>3 hours</strong> before the booking start time — <strong>60%</strong> refund.</li>
+                    <li>Between <strong>2–3 hours</strong> before start — <strong>40%</strong> refund.</li>
+                    <li>Between <strong>1–2 hours</strong> before start — <strong>10%</strong> refund.</li>
+                    <li>Within <strong>1 hour</strong> of start time — <strong>no refund</strong>, and cancellation is not permitted.</li>
+                  </ul>
+                  <p className="mt-2">
+                    Refunds will be processed automatically to your original payment method after cancellation is confirmed.
+                  </p>
                 </section>
+
 
                 <section>
                   <h3 className="font-semibold text-lg text-gray-900 mb-2">5. Payment Terms</h3>
