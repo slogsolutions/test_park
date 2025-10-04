@@ -1,5 +1,11 @@
-// backend/models/Booking.js
 import mongoose from 'mongoose';
+
+const refundSchema = new mongoose.Schema({
+  percent: { type: Number, default: 0 }, // percent refunded
+  amount: { type: Number, default: 0 }, // absolute amount refunded
+  processedAt: { type: Date, default: null }, // when refund was recorded / processed
+  refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'ParkFinderSecondUser', default: null }, // optional actor who processed refund
+}, { _id: false });
 
 const bookingSchema = new mongoose.Schema({
   user: {
@@ -43,7 +49,7 @@ const bookingSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['pending', 'accepted', 'rejected', 'confirmed', 'active', 'overdue', 'completed', 'cancelled'],
-    default: 'pending', // <-- sensible default (not confirmed)
+    default: 'pending',
   },
   paymentStatus: {
     type: String,
@@ -51,6 +57,7 @@ const bookingSchema = new mongoose.Schema({
     default: 'pending',
   },
 
+  // OTPs
   otp: {
     type: String,
     default: null,
@@ -64,6 +71,7 @@ const bookingSchema = new mongoose.Schema({
     default: false,
   },
 
+  // session timing
   startedAt: {
     type: Date,
     default: null,
@@ -76,14 +84,31 @@ const bookingSchema = new mongoose.Schema({
     type: Date,
     default: null,
   },
+
+  // second / checkout OTP
   secondOtp: {
-  type: String,
-  default: null,
-},
-secondOtpExpires: {
-  type: Date,
-  default: null,
-},
+    type: String,
+    default: null,
+  },
+  secondOtpExpires: {
+    type: Date,
+    default: null,
+  },
+
+  // cancellation/refund metadata
+  cancelledAt: {
+    type: Date,
+    default: null,
+  },
+  cancelledBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'ParkFinderSecondUser',
+    default: null,
+  },
+  refund: {
+    type: refundSchema,
+    default: () => ({}),
+  },
 
   createdAt: {
     type: Date,
@@ -91,5 +116,6 @@ secondOtpExpires: {
   },
 });
 
+// keep existing model name if already registered
 export default mongoose.models.parkfindersecondBooking ||
   mongoose.model('parkfindersecondBooking', bookingSchema);
