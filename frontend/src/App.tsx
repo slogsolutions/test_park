@@ -92,12 +92,15 @@ function AppRoutes() {
   // Register FCM messaging globally for the running app (active on all routes)
   useFirebaseMessaging(user);
 
-  // 🔹 Open phone verification modal if user exists but not verified
   useEffect(() => {
-    if (user && !user.phoneVerified) {
-      setShowPhoneModal(true);
-    }
-  }, [user]);
+  // Show modal only if phoneVerified is explicitly false
+  if (user && user.phoneVerified === false) {
+    setShowPhoneModal(true);
+  } else {
+    setShowPhoneModal(false);
+  }
+}, [user]);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
