@@ -1,4 +1,3 @@
-// backend/routes/captain.js
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import { captainOnly } from '../middleware/roles.js';
@@ -60,7 +59,7 @@ router.get('/parkingspaces', protect, captainOnly, async (req, res) => {
 
 /**
  * PATCH /api/captain/parkingspaces/:id/status
- * Body: { action: "approve" | "reject" }  OR { status: "approved" | "rejected" }
+ * Body: { action: "approve" | "reject" }  OR { status: "submitted" | "rejected" }  (also accepts "approved"/"approve" as synonyms)
  *
  * Behavior changes:
  *  - Removed the owner-equals-requesting-user restriction.
@@ -71,14 +70,16 @@ router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res)
   try {
     const { id } = req.params;
     const actionRaw = req.body.action || req.body.status;
-    if (!actionRaw) return res.status(400).json({ message: 'action or status required (approve/reject)' });
+    if (!actionRaw) return res.status(400).json({ message: 'action or status required (submit/reject)' });
 
     const action = String(actionRaw).toLowerCase().trim();
+    // treat approve/approved as synonyms for submit/submitted for incoming requests,
+    // but canonical stored status will be "submitted"
     const isApprove = action === 'approve' || action === 'approved' || action === 'submit' || action === 'submitted';
     const isReject = action === 'reject' || action === 'rejected';
 
     if (!isApprove && !isReject) {
-      return res.status(400).json({ message: 'Invalid action. Use "approve" or "reject".' });
+      return res.status(400).json({ message: 'Invalid action. Use "submit"/"approve" or "reject".' });
     }
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -109,8 +110,8 @@ router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res)
       }
     }
 
-    // map to schema-safe status values
-    const newStatus = isApprove ? 'approved' : 'rejected';
+    // map to schema-safe status values: use "submitted" as canonical label now
+    const newStatus = isApprove ? 'submitted' : 'rejected';
 
     // build update using $set / $unset to avoid setting undefined
     const update = { $set: { status: newStatus } };
@@ -136,7 +137,7 @@ router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res)
       console.warn('Socket emit failed:', e);
     }
 
-    return res.json({ message: isApprove ? 'Space approved' : 'Space rejected', space: updated });
+    return res.json({ message: isApprove ? 'Space submitted' : 'Space rejected', space: updated });
   } catch (err) {
     console.error('Captain route error (parkingspace status):', err);
     return res.status(500).json({ message: 'Server error', error: err.message });

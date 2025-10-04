@@ -1,10 +1,9 @@
-// frontend/src/pages/CaptainDashboard.tsx
 import React, { useEffect, useState } from "react";
 import api from "../utils/api";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Status type definitions
-type SpaceStatus = "pending" | "approved" | "rejected";
+type SpaceStatus = "pending" | "submitted" | "rejected";
 type FilterStatus = SpaceStatus | "all";
 
 interface ParkingSpace {
@@ -31,7 +30,7 @@ export default function CaptainDashboard() {
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
-    approved: 0,
+    submitted: 0,
     rejected: 0
   });
 
@@ -41,16 +40,16 @@ export default function CaptainDashboard() {
       const res = await api.get("/captain/parkingspaces");
       const allSpaces: ParkingSpace[] = res.data.spaces || res.data || [];
       setSpaces(allSpaces);
-      
+
       // Calculate stats
       const stats = {
         total: allSpaces.length,
         pending: allSpaces.filter(space => space.status === "pending").length,
-        approved: allSpaces.filter(space => space.status === "approved").length,
+        submitted: allSpaces.filter(space => space.status === "submitted").length,
         rejected: allSpaces.filter(space => space.status === "rejected").length
       };
       setStats(stats);
-      
+
     } catch (err) {
       console.error("Error fetching captain spaces:", err);
     } finally {
@@ -72,6 +71,7 @@ export default function CaptainDashboard() {
 
   const updateStatus = async (spaceId: string, status: SpaceStatus) => {
     try {
+      // send status; backend accepts "submitted" or "approved" and will map appropriately
       await api.patch(`/captain/parkingspaces/${spaceId}/status`, { status });
       await fetchSpaces();
     } catch (err) {
@@ -82,7 +82,7 @@ export default function CaptainDashboard() {
 
   const getStatusColor = (status: SpaceStatus) => {
     switch (status) {
-      case "approved": return "bg-gradient-to-r from-green-500 to-emerald-600";
+      case "submitted": return "bg-gradient-to-r from-green-500 to-emerald-600";
       case "rejected": return "bg-gradient-to-r from-red-500 to-rose-600";
       case "pending": return "bg-gradient-to-r from-yellow-500 to-amber-600";
       default: return "bg-gray-500";
@@ -91,7 +91,7 @@ export default function CaptainDashboard() {
 
   const getStatusIcon = (status: SpaceStatus) => {
     switch (status) {
-      case "approved": return "✅";
+      case "submitted": return "✅";
       case "rejected": return "❌";
       case "pending": return "⏳";
       default: return "📦";
@@ -182,7 +182,7 @@ export default function CaptainDashboard() {
   const CaptainApproveModal = ({ space, onClose }: { space: ParkingSpace; onClose: () => void }) => {
     const [updating, setUpdating] = useState(false);
 
-    const handleStatusUpdate = async (status: "approved" | "rejected") => {
+    const handleStatusUpdate = async (status: "submitted" | "rejected") => {
       setUpdating(true);
       try {
         await updateStatus(space._id, status);
@@ -274,11 +274,11 @@ export default function CaptainDashboard() {
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => handleStatusUpdate("approved")}
+                  onClick={() => handleStatusUpdate("submitted")}
                   disabled={updating}
                   className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-lg transition-all duration-300 disabled:opacity-50"
                 >
-                  {updating ? "Approving..." : "✅ Approve Space"}
+                  {updating ? "Submitting..." : "✅ Submit Space"}
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
@@ -339,8 +339,8 @@ export default function CaptainDashboard() {
             icon="⏳"
           />
           <StatsCard 
-            title="Approved" 
-            value={stats.approved} 
+            title="Submitted" 
+            value={stats.submitted} 
             color="bg-gradient-to-r from-green-500 to-emerald-500" 
             icon="✅"
           />
@@ -361,7 +361,7 @@ export default function CaptainDashboard() {
         >
           <FilterButton status="all" count={stats.total} isActive={activeFilter === "all"} />
           <FilterButton status="pending" count={stats.pending} isActive={activeFilter === "pending"} />
-          <FilterButton status="approved" count={stats.approved} isActive={activeFilter === "approved"} />
+          <FilterButton status="submitted" count={stats.submitted} isActive={activeFilter === "submitted"} />
           <FilterButton status="rejected" count={stats.rejected} isActive={activeFilter === "rejected"} />
         </motion.div>
 

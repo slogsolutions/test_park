@@ -22,7 +22,6 @@ interface ParkingFormData {
   amenities: string[];
   photos: FileList | null;
   discount: number;
-  region?: string;
 }
 
 const amenitiesOptions = [
@@ -56,7 +55,6 @@ export default function RegisterParking() {
     amenities: [],
     photos: null,
     discount: 0,
-    region: '',
   });
 
   // validation errors state
@@ -154,11 +152,6 @@ export default function RegisterParking() {
     if (!formData.zipCode || formData.zipCode.trim().length === 0) newErrors.zipCode = 'ZIP Code is required.';
     if (!formData.country || formData.country.trim().length === 0) newErrors.country = 'Country is required.';
 
-    // Ensure region is set (since backend enforces region for captain reviews)
-    if (!formData.region || formData.region.trim().length === 0) {
-      newErrors.region = 'Region is required. It is usually auto-filled from city — you can select it.';
-    }
-
     // Amenities - at least one
     if (!formData.amenities || formData.amenities.length === 0) {
       newErrors.amenities = 'Select at least one amenity.';
@@ -235,7 +228,6 @@ export default function RegisterParking() {
           amenities: formData.amenities,
           location: { type: 'Point', coordinates: [lon, lat] },
           discount: Number(formData.discount),
-          region: formData.region ? String(formData.region).toLowerCase() : undefined,
         };
 
         await parkingService.registerSpaceJSON(payload);
@@ -264,13 +256,6 @@ export default function RegisterParking() {
       data.set('lng', String(lon));
       data.set('lat', String(lat));
 
-      // include region in multipart form data (normalized)
-      if (formData.region) {
-        data.set('region', String(formData.region).toLowerCase());
-      } else {
-        data.set('region', '');
-      }
-
       await parkingService.registerSpace(data);
       toast.success('Parking space registered successfully!');
       navigate('/');
@@ -286,16 +271,14 @@ export default function RegisterParking() {
       latitude: latitude ?? markerPosition.latitude,
       longitude: longitude ?? markerPosition.longitude,
     });
-    setFormData((prev) => ({
-      ...prev,
+    setFormData({
+      ...formData,
       street: location.street || '',
       city: location.city || '',
       state: location.state || '',
       zipCode: location.zipCode || '',
       country: location.country || '',
-      // auto-set region from city if present
-      region: location.city ? String(location.city).toLowerCase() : prev.region,
-    }));
+    });
     setViewport({
       ...viewport,
       latitude: latitude ?? viewport.latitude,
@@ -322,8 +305,6 @@ export default function RegisterParking() {
             state: loc.state || '',
             zipCode: loc.zipCode || '',
             country: loc.country || '',
-            // auto-fill region from city
-            region: loc.city ? String(loc.city).toLowerCase() : prev.region,
           }));
           // clear address related errors
           setErrors(prev => ({ ...prev, location: '', street: '', city: '', state: '', zipCode: '', country: '' }));
@@ -340,9 +321,9 @@ export default function RegisterParking() {
   const renderFileNames = () => {
     if (!formData.photos || formData.photos.length === 0) 
       return <span className="italic text-sm text-gray-500">No photos chosen</span>;
-    return Array.from(formData.photos).map((f, i) => (
+    return Array.from(formData.photos).map((f, i) => 
       <div key={i} className="text-sm text-gray-700 bg-gray-100 px-2 py-1 rounded">{(f as File).name}</div>
-    ));
+    );
   };
 
   return (
@@ -691,8 +672,6 @@ export default function RegisterParking() {
                             state: loc.state || '',
                             zipCode: loc.zipCode || '',
                             country: loc.country || '',
-                            // auto-fill region from city
-                            region: loc.city ? String(loc.city).toLowerCase() : prev.region,
                           }));
                           setErrors(prev => ({ ...prev, location: '', street: '', city: '', state: '', zipCode: '', country: '' }));
                         } catch {
@@ -722,8 +701,6 @@ export default function RegisterParking() {
                                 state: loc.state || '',
                                 zipCode: loc.zipCode || '',
                                 country: loc.country || '',
-                                // auto-fill region from city
-                                region: loc.city ? String(loc.city).toLowerCase() : prev.region,
                               }));
                               setErrors(prev => ({ ...prev, location: '', street: '', city: '', state: '', zipCode: '', country: '' }));
                             } catch {
@@ -767,13 +744,7 @@ export default function RegisterParking() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                       value={formData.city}
                       onChange={(e) => {
-                        const cityVal = e.target.value;
-                        setFormData(prev => ({
-                          ...prev,
-                          city: cityVal,
-                          // keep region in sync with city automatically (normalized)
-                          region: cityVal ? String(cityVal).toLowerCase() : prev.region,
-                        }));
+                        setFormData({ ...formData, city: e.target.value });
                         setErrors(prev => ({ ...prev, city: '' }));
                       }}
                       placeholder="City"
@@ -817,24 +788,6 @@ export default function RegisterParking() {
                     />
                   </div>
                   {(errors.zipCode || errors.country) && <div className="text-red-500 text-sm mt-1">{errors.zipCode || errors.country}</div>}
-
-                                    {/* NEW: Region field (auto-filled from city but user can override) */}
-                  <div>
-                    <label className="block text-sm text-gray-700 dark:text-gray-300 mb-2">Region</label>
-                    <input
-                      type="text"
-                      value={formData.region || ''}
-                      onChange={(e) => {
-                        setRegionTouched(true); // user edited region manually — stop auto-overwrites
-                        setFormData({ ...formData, region: e.target.value });
-                        setErrors(prev => ({ ...prev, region: '' }));
-                      }}
-                      placeholder="e.g., dehradun"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                    />
-                    {errors.region && <div className="text-red-500 text-sm mt-1">{errors.region}</div>}
-                    <div className="text-xs text-gray-500 mt-1">Region is auto-filled from city when you pick a location or use current location. You can edit it here.</div>
-                  </div>
                 </div>
               </div>
 
@@ -866,7 +819,7 @@ export default function RegisterParking() {
             </div>
           </div>
         </div>
-      </div> 
+      </div>
     </div>
   );
 }
