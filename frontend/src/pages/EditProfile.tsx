@@ -18,6 +18,7 @@ export default function EditProfile() {
     address: auth?.user?.kycData?.address || "",
     city: auth?.user?.kycData?.city || "",
     country: auth?.user?.kycData?.country || "",
+    region: auth?.user?.region || "",
   };
 
   const [form, setForm] = useState(initial);
@@ -46,6 +47,8 @@ export default function EditProfile() {
           city: form.city,
           country: form.country,
         },
+        // include region (normalize to lowercase for consistency)
+        region: form.region ? String(form.region).toLowerCase() : null,
       };
 
       const res = await fetch(`${API_BASE}/api/auth/me`, {
@@ -134,6 +137,22 @@ export default function EditProfile() {
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
                 className="w-full border rounded px-3 py-2"
               />
+            </div>
+
+            {/* NEW: Region field for captains */}
+            <div>
+              <label className="block text-sm text-gray-700">Region</label>
+              <select
+                value={form.region}
+                onChange={(e) => setForm({ ...form, region: e.target.value })}
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="">Select region</option>
+                <option value="dehradun">Dehradun</option>
+                <option value="mussoorie">Mussoorie</option>
+                <option value="other">Other</option>
+              </select>
+              <small className="text-xs text-gray-500">If you're a captain, set your assigned region here.</small>
             </div>
           </div>
 

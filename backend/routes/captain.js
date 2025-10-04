@@ -22,23 +22,29 @@ const getOwnerId = (space) => {
 
 /**
  * GET /api/captain/parkingspaces?status=pending
- * List parking spaces belonging to the captain (optionally filter by status).
+ * List parking spaces for captains:
+ *  - If the requesting user is a captain and has a `region`, only spaces with that region are returned.
+ *  - Otherwise (admins or captains without region) return spaces matching optional status.
  */
 router.get('/parkingspaces', protect, captainOnly, async (req, res) => {
   try {
     const rawStatus = req.query.status;
     const statusFilter = rawStatus ? { status: String(rawStatus).toLowerCase() } : {};
 
-    // owner field may differ between models; search in any of those fields
-    const ownerFieldNames = ['owner', 'user', 'provider', 'createdBy'];
-    const ownerFilters = ownerFieldNames.map((f) => ({ [f]: req.user._id }));
-
     const query = {
-      $and: [
-        { $or: ownerFilters },
-        ...(rawStatus ? [statusFilter] : []),
-      ],
+      ... (rawStatus ? statusFilter : {}),
     };
+
+    // If the authenticated user is a captain and has a region, enforce region filter
+    if (req.user && req.user.isCaptain && req.user.region) {
+      query.region = req.user.region.toLowerCase();
+    } else if (req.query.region) {
+      // optional: allow passing ?region= for admins or other callers (kept permissive)
+      query.region = String(req.query.region).toLowerCase();
+    }
+
+    // Exclude soft-deleted spaces if your app uses isDeleted
+    query.isDeleted = { $ne: true };
 
     const spaces = await ParkingSpace.find(query)
       .populate('owner', 'name email')
@@ -56,10 +62,11 @@ router.get('/parkingspaces', protect, captainOnly, async (req, res) => {
  * PATCH /api/captain/parkingspaces/:id/status
  * Body: { action: "approve" | "reject" }  OR { status: "approved" | "rejected" }
  *
- * This minimal route updates approvedBy/approvedAt and a schema-safe status.
+ * Behavior changes:
+ *  - Removed the owner-equals-requesting-user restriction.
+ *  - Enforces that a captain (with region set) can only review spaces in their region.
+ *  - Admins or users without region are not restricted by region here.
  */
-// replace the PATCH handler in backend/routes/captain.js with this
-
 router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res) => {
   try {
     const { id } = req.params;
@@ -88,17 +95,22 @@ router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res)
 
     if (!reqUserId) return res.status(401).json({ message: 'Authenticated user required' });
 
-    // If you intend captains to moderate any space, REMOVE this owner check.
-    // If not, keep it. Currently it prevents updates when owner exists && !== req user.
-    if (ownerId && ownerId !== reqUserId) {
-      return res.status(403).json({ message: 'You are not the owner of this parking space' });
+    // NEW: Enforce region-based authorization for captains.
+    // If the requesting user is a captain and has a region set, they may only review spaces in that region.
+    if (req.user && req.user.isCaptain && req.user.region) {
+      const spaceRegion = (space.region || '').toLowerCase();
+      const userRegion = (req.user.region || '').toLowerCase();
+      if (!spaceRegion) {
+        // If a space has no region assigned, disallow captain from editing it (safer).
+        return res.status(403).json({ message: 'This parking space has no region assigned; contact admin' });
+      }
+      if (spaceRegion !== userRegion) {
+        return res.status(403).json({ message: 'You are not authorized to review spaces outside your region' });
+      }
     }
 
     // map to schema-safe status values
-    // map to schema-safe status values
-// Approve => 'approved', Reject => 'rejected'
-const newStatus = isApprove ? 'approved' : 'rejected';
-
+    const newStatus = isApprove ? 'approved' : 'rejected';
 
     // build update using $set / $unset to avoid setting undefined
     const update = { $set: { status: newStatus } };
@@ -130,6 +142,5 @@ const newStatus = isApprove ? 'approved' : 'rejected';
     return res.status(500).json({ message: 'Server error', error: err.message });
   }
 });
-
 
 export default router;
