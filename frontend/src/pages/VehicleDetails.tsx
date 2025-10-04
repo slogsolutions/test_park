@@ -84,11 +84,11 @@ export default function VehicleDetails() {
       if (spaceId) {
         try {
           const token = localStorage.getItem('token');
-          const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/parking/availability/${spaceId}`, {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
+          const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/parking/${spaceId}/availability`, {
+  headers: {
+    Authorization: `Bearer ${token}`,
+  },
+});
     
           if (!response.ok) {
             throw new Error('Failed to fetch parking availability');
@@ -148,76 +148,112 @@ export default function VehicleDetails() {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!validateForm()) {
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!validateForm()) {
+    return;
+  }
+
+  if (!spaceId) {
+    alert('No parking space info — go back and try again.');
+    return;
+  }
+  if (!userId) {
+    alert('No user info — log in and try again.');
+    return;
+  }
+  if (!selectedVehicle) {
+    alert('Please select a vehicle from the list.');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // Check availability before booking
+    const token = localStorage.getItem('token');
+    const availabilityResponse = await fetch(`${import.meta.env.VITE_BASE_URL}/api/parking/${spaceId}/availability`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!availabilityResponse.ok) {
+      throw new Error('Failed to check availability');
+    }
+
+    const availabilityData = await availabilityResponse.json();
+    const availableSlots = availabilityData.availability?.filter((slot: any) => !slot.isBooked) || [];
+
+    // Check if selected time fits in any available slot
+    const isSlotAvailable = availableSlots.some((slot: any) => {
+      const slotStart = new Date(slot.startTime);
+      const slotEnd = new Date(slot.endTime);
+      return manualStartTime >= slotStart && manualEndTime <= slotEnd;
+    });
+
+    if (!isSlotAvailable) {
+      alert('Selected time is no longer available. Please choose a different time.');
+      setLoading(false);
       return;
     }
 
-    setLoading(true);
+    // Proceed to booking
+    const payload = {
+      parkingSpaceId: spaceId,
+      userId,
+      startTime: manualStartTime!.toISOString(),
+      endTime: manualEndTime!.toISOString(),
+      vehicleNumber: selectedVehicle.licensePlate,
+      vehicleType: selectedVehicle.vehicleType ?? selectedVehicle.model,
+      vehicleModel: selectedVehicle.model,
+      contactNumber: selectedVehicle.contactNumber,
+      chassisNumber: selectedVehicle.chassisNumber,
+      status: 'confirmed',
+    };
 
-    try {
-      if (!spaceId) {
-        alert('No parking space info — go back and try again.');
-        return;
-      }
-      if (!userId) {
-        alert('No user info — log in and try again.');
-        return;
-      }
-      if (!selectedVehicle) {
-        alert('Please select a vehicle from the list.');
-        return;
-      }
+    const response = await fetch(`${import.meta.env.VITE_BASE_URL}/api/booking`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
 
-      const payload = {
-        parkingSpaceId: spaceId,
-        userId,
-        startTime: manualStartTime!.toISOString(),
-        endTime: manualEndTime!.toISOString(),
-        vehicleNumber: selectedVehicle.licensePlate,
-        vehicleType: selectedVehicle.vehicleType ?? selectedVehicle.model,
-        vehicleModel: selectedVehicle.model,
-        contactNumber: selectedVehicle.contactNumber,
-        chassisNumber: selectedVehicle.chassisNumber,
-        status: 'confirmed',
-      };
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = { message: text }; }
 
-      console.log('POST /api/booking payload:', payload);
-
-      const url = `${import.meta.env.VITE_BASE_URL}/api/booking`;
-      console.log('Posting to:', url);
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const text = await response.text();
-      let data;
-      try { data = JSON.parse(text); } catch { data = { message: text }; }
-
-      console.log('Booking response status:', response.status, 'body:', data);
-
-      if (!response.ok) {
-        alert(`Error: ${data.message || response.statusText}`);
-        return;
-      }
-
-      alert('Booking confirmed!');
-      navigate('/bookings', { state: { referenceId: data.booking?._id ?? data.referenceId } });
-    } catch (err) {
-      console.error('Error submitting booking:', err);
-      alert('An error occurred. Try again.');
-    } finally {
-      setLoading(false);
+    if (!response.ok) {
+      alert(`Error: ${data.message || response.statusText}`);
+      return;
     }
-  };
+
+    // Notify backend to decrement slot count
+    await fetch(`${import.meta.env.VITE_BASE_URL}/api/parking/decrement-slot/${spaceId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        startTime: manualStartTime!.toISOString(),
+        endTime: manualEndTime!.toISOString()
+      }),
+    });
+
+    alert('Booking confirmed!');
+    navigate('/bookings', { state: { referenceId: data.booking?._id ?? data.referenceId } });
+  } catch (err) {
+    console.error('Error submitting booking:', err);
+    alert('An error occurred. Try again.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const handleCardClick = (vehicle: any) => {
     setSelectedVehicle(vehicle);

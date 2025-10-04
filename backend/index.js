@@ -87,7 +87,7 @@ app.use('/api/parking', parkingRoutes);
 // Keep the original mount for backwards-compatibility
 app.use('/api/booking', bookingRoutes);
 // ALSO mount with plural to match examples / frontend that may call /api/bookings
-app.use('/api/bookings', bookingRoutes);
+// app.use('/api/bookings', bookingRoutes);
 app.use('/api/payment', paymentRoutes);
 app.use("/api/admin", adminRoutes);
 

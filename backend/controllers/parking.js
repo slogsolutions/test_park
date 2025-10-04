@@ -317,14 +317,14 @@ export const registerParkingSpace = async (req, res) => {
 };
 
 export const getParkingSpaceAvailability = async (req, res) => {
-  const { spaceId } = req.params;
+  const { id } = req.params; // match the route param
 
   if (!req.user) {
     return res.status(401).json({ message: 'User not authenticated' });
   }
 
   try {
-    const parkingSpace = await ParkingSpace.findById(spaceId);
+    const parkingSpace = await ParkingSpace.findById(id);
 
     if (!parkingSpace || parkingSpace.isDeleted) {
       return res.status(404).json({ message: 'Parking space not found' });
@@ -344,6 +344,7 @@ export const getParkingSpaceAvailability = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch availability', error: error.message });
   }
 };
+
 
 export const updateParkingSpace = async (req, res) => {
   try {

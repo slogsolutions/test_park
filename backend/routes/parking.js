@@ -39,8 +39,9 @@ router.put('/:id', protect, upload.array('photos', 5), updateParkingSpace);
 
 // Put specific routes before the parameterized route
 router.get('/my-spaces', protect, getMyParkingSpaces);
-router.get('/:id/availability', protect, getParkingSpaceAvailability); // recommended
-router.get('/:id', getParkingSpaceById);
+// Correct order:
+router.get('/:id/availability', protect, getParkingSpaceAvailability); // specific first
+router.get('/:id', getParkingSpaceById); // generic last
 
 // New route: set per-space online status
 router.patch('/:id/online', protect, setOnlineStatus);

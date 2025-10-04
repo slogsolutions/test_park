@@ -1,3 +1,4 @@
+// src/components/vehicles/AddVehicle.tsx
 import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
@@ -23,35 +24,56 @@ const initialVehicleDetails: VehicleDetails = {
   registrationDate: '',
 };
 
+const API_BASE = import.meta.env.VITE_BASE_URL ?? '';
+
 const AddVehicle: React.FC = () => {
   const [step, setStep] = useState<number>(1);
   const [rcNumber, setRcNumber] = useState<string>('');
   const [vehicleDetails, setVehicleDetails] = useState<VehicleDetails>(initialVehicleDetails);
   const [message, setMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
   const totalSteps = 2;
   const navigate = useNavigate();
 
   const progress = (step / totalSteps) * 100;
 
+  const goToStep = (stepNumber: number) => {
+    setMessage('');
+    setError('');
+    setStep(stepNumber);
+  };
+
+  // ---------------- Step 1: Validate RC ----------------
   const handleRcSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage('');
     setError('');
-
     if (!rcNumber.trim()) {
       setError('RC number is required.');
       return;
     }
 
+    setLoading(true);
     try {
-      const response = await axios.post(`${import.meta.env.VITE_BASE_URL}/proxy/validate-RC`, {
-        document_type: 'RC',
-        reference_id: '0000-0000-0000-2005',
-        consent_purpose: 'For bank account purpose only',
-        id_number: rcNumber.trim(),
-        consent: 'Y',
-      });
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setError('User is not authenticated. Please log in again.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await axios.post(
+        `${API_BASE}/api/vehicles/validate-rc`,
+        {
+          document_type: 'RC',
+          reference_id: '0000-0000-0000-2005',
+          consent_purpose: 'For bank account purpose only',
+          id_number: rcNumber.trim(),
+          consent: 'Y',
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       if (response.data?.kycStatus === 'SUCCESS') {
         const fetchedDetails = response.data.kycResult || {};
@@ -65,18 +87,19 @@ const AddVehicle: React.FC = () => {
           chassisNumber: fetchedDetails.chassisNumber || '',
           registrationDate: fetchedDetails.registrationDate || '',
         });
-        setStep(2);
+        goToStep(2);
       } else {
         setError('Failed to fetch vehicle details. Please try again.');
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Error fetching RC details:', err);
       setError('Failed to fetch vehicle details. Please check your RC number and try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // name is a key of VehicleDetails
+  // ---------------- Step 2: Add / Update Vehicle ----------------
   const handleChange = (name: keyof VehicleDetails, value: string) => {
     setVehicleDetails((prev) => ({ ...prev, [name]: value }));
   };
@@ -85,48 +108,49 @@ const AddVehicle: React.FC = () => {
     e.preventDefault();
     setMessage('');
     setError('');
+    setLoading(true);
 
     try {
       const token = localStorage.getItem('token');
       if (!token) {
         setError('User is not authenticated. Please log in again.');
+        setLoading(false);
         return;
       }
 
-      const response = await axios.post(
-        `${import.meta.env.VITE_BASE_URL}/api/booking/add-vehicle`,
-        vehicleDetails,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const formattedVehicleDetails = {
+        ...vehicleDetails,
+        year: Number(vehicleDetails.year),
+      };
+
+      const response = await axios.post(`${API_BASE}/api/vehicles/add`, formattedVehicleDetails, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
 
       if (response.data) {
         setMessage('Vehicle added successfully!');
         setVehicleDetails(initialVehicleDetails);
-        setStep(1);
         setRcNumber('');
-        toast.success('Your vehicle is registered now. Enjoy your booking!');
+        goToStep(1);
+        toast.success('Your vehicle is registered. You can now book parking!');
+        navigate('/bookings'); // optional: redirect to bookings
       } else {
         setError('Failed to add vehicle. Please try again.');
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error('Error adding vehicle:', err);
       setError('Failed to add vehicle. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // render field input by key with proper typing
   const renderInputForKey = (key: keyof VehicleDetails) => {
-    const label = key
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, (str) => str.toUpperCase());
+    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase());
 
-    // special handling for registrationDate and year
     if (key === 'registrationDate') {
       const value = vehicleDetails.registrationDate
         ? new Date(vehicleDetails.registrationDate).toISOString().slice(0, 10)
@@ -136,7 +160,6 @@ const AddVehicle: React.FC = () => {
           <label className="block text-gray-700 font-medium">{label}:</label>
           <input
             type="date"
-            name={key}
             value={value}
             onChange={(e) => handleChange(key, e.target.value)}
             required
@@ -152,7 +175,6 @@ const AddVehicle: React.FC = () => {
           <label className="block text-gray-700 font-medium">{label}:</label>
           <input
             type="number"
-            name={key}
             min={1900}
             max={2100}
             value={vehicleDetails.year}
@@ -164,13 +186,11 @@ const AddVehicle: React.FC = () => {
       );
     }
 
-    // default text input
     return (
       <div key={key} className="mb-4">
         <label className="block text-gray-700 font-medium">{label}:</label>
         <input
           type="text"
-          name={key}
           value={vehicleDetails[key] as string}
           onChange={(e) => handleChange(key, e.target.value)}
           required
@@ -182,12 +202,15 @@ const AddVehicle: React.FC = () => {
 
   return (
     <div className="min-h-screen p-6">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center mb-6 text-gray-700 hover:text-black"
-      >
-        <ArrowLeft className="mr-2" /> Back
-      </button>
+      {step === 2 && (
+        <button
+          type="button"
+          onClick={() => goToStep(1)}
+          className="flex items-center mb-6 text-gray-700 hover:text-black"
+        >
+          <ArrowLeft className="mr-2" /> Back
+        </button>
+      )}
 
       {/* Progress bar */}
       <div className="mb-4">
@@ -204,7 +227,7 @@ const AddVehicle: React.FC = () => {
       {step === 1 && (
         <>
           <h2 className="text-2xl font-bold mb-4">Enter RC Number</h2>
-          {error && <p className="text-red-500">{error}</p>}
+          {error && <p className="text-red-500 mb-2">{error}</p>}
           <form onSubmit={handleRcSubmit}>
             <div className="mb-4">
               <label className="block text-gray-700 font-medium">RC Number:</label>
@@ -213,14 +236,16 @@ const AddVehicle: React.FC = () => {
                 value={rcNumber}
                 onChange={(e) => setRcNumber(e.target.value)}
                 required
+                disabled={loading}
                 className="w-full px-4 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
             <button
               type="submit"
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+              disabled={loading}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition disabled:opacity-50"
             >
-              Fetch Details
+              {loading ? 'Fetching...' : 'Fetch Details'}
             </button>
           </form>
         </>
@@ -229,18 +254,18 @@ const AddVehicle: React.FC = () => {
       {step === 2 && (
         <>
           <h2 className="text-2xl font-bold mb-4">Update Vehicle Details</h2>
-          {message && <p className="text-green-500">{message}</p>}
-          {error && <p className="text-red-500">{error}</p>}
+          {message && <p className="text-green-500 mb-2">{message}</p>}
+          {error && <p className="text-red-500 mb-2">{error}</p>}
           <form onSubmit={handleSubmit}>
-            {(['make', 'model', 'year', 'licensePlate', 'chassisNumber', 'registrationDate'] as (keyof VehicleDetails)[]).map((k) =>
-              renderInputForKey(k)
+            {(['make', 'model', 'year', 'licensePlate', 'chassisNumber', 'registrationDate'] as (keyof VehicleDetails)[]).map(
+              (k) => renderInputForKey(k)
             )}
-
             <button
               type="submit"
-              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+              disabled={loading}
+              className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition disabled:opacity-50"
             >
-              Add Vehicle
+              {loading ? 'Submitting...' : 'Add Vehicle'}
             </button>
           </form>
         </>

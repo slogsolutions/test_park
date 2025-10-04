@@ -5,8 +5,17 @@ import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js';
 import UserToken from '../models/UserToken.js';
 import NotificationService from '../service/NotificationService.js';
-
+const BUFFER_MINUTES = 30;
 // Simple notification placeholder
+
+// Apply buffer to start/end time
+const applyBuffer = (startTime, endTime) => {
+  const bufferedStart = new Date(new Date(startTime).getTime() - BUFFER_MINUTES * 60 * 1000);
+  const bufferedEnd = new Date(new Date(endTime).getTime() + BUFFER_MINUTES * 60 * 1000);
+  return { bufferedStart, bufferedEnd };
+};
+
+
 const sendNotification = (email, subject, message) => {
   console.log(`Notification sent to ${email}: ${subject} - ${message}`);
 };
@@ -231,6 +240,46 @@ export const getProviderBookings = async (req, res) => {
   }
 };
 
+// export const updateBookingStatus = async (req, res) => {
+//   try {
+//     const { status } = req.body;
+//     const bookingId = req.params.id;
+//     const allowed = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled', 'overdue'];
+//     if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+//     const booking = await Booking.findById(bookingId);
+//     if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+//     booking.status = status;
+//     if (status === 'accepted') booking.providerId = req.user._id;
+//     if (status === 'completed') {
+//       booking.completedAt = new Date();
+//       if (!booking.endedAt) booking.endedAt = booking.completedAt;
+//       if (!booking.endTime) booking.endTime = booking.sessionEndAt ?? booking.completedAt;
+//       if (booking.parkingSpace) {
+//         try { await releaseParkingSpot(booking.parkingSpace, booking); } catch (e) { console.warn('release failed on manual complete', e); }
+//       }
+//     }
+
+//     await booking.save();
+
+//     try {
+//       if (global.io) {
+//         const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+//         global.io.emit('booking-updated', { booking: populated });
+//       }
+//     } catch (emitErr) {
+//       console.warn('[updateBookingStatus] emit error', emitErr);
+//     }
+
+//     const freshBooking = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+//     res.status(200).json({ message: 'Booking status updated successfully', booking: freshBooking });
+//   } catch (error) {
+//     console.error('updateBookingStatus error', error);
+//     res.status(500).json({ message: 'Failed to update booking status', error: error.message });
+//   }
+// };
+
 export const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -241,14 +290,23 @@ export const updateBookingStatus = async (req, res) => {
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
+    const prevStatus = booking.status;
     booking.status = status;
+
+    // If provider accepts
     if (status === 'accepted') booking.providerId = req.user._id;
-    if (status === 'completed') {
+
+    // Handle cancellation / rejection / completion
+    if (['cancelled', 'rejected'].includes(status) && prevStatus !== status) {
+      await incrementAvailableSpot(booking.parkingSpace);
+    }
+    if (status === 'completed' && prevStatus !== 'completed') {
       booking.completedAt = new Date();
-      if (!booking.endedAt) booking.endedAt = booking.completedAt;
+      if (!booking.endedAt) booking.endedAt = booking.sessionEndAt ?? new Date();
       if (!booking.endTime) booking.endTime = booking.sessionEndAt ?? booking.completedAt;
+
       if (booking.parkingSpace) {
-        try { await releaseParkingSpot(booking.parkingSpace, booking); } catch (e) { console.warn('release failed on manual complete', e); }
+        await incrementAvailableSpot(booking.parkingSpace);
       }
     }
 
@@ -270,6 +328,7 @@ export const updateBookingStatus = async (req, res) => {
     res.status(500).json({ message: 'Failed to update booking status', error: error.message });
   }
 };
+
 
 export const getBookingById = async (req, res) => {
   try {
@@ -623,4 +682,44 @@ export const extendBooking = async (req, res) => {
     console.error('extendBooking error:', error);
     return res.status(500).json({ message: 'Server error', error: error.message });
   }
+};
+// Increment available spots safely
+export const incrementAvailableSpot = async (parkingId) => {
+  if (!parkingId) return null;
+  const parking = await ParkingSpace.findById(parkingId);
+  if (!parking) return null;
+
+  const current = parking.availableSpots ?? 0;
+  const total = parking.totalSpots ?? 0;
+  if (current < total) parking.availableSpots = current + 1;
+
+  await parking.save();
+  if (global.io) {
+    global.io.emit('parking-updated', { parkingId: parking._id.toString(), availableSpots: parking.availableSpots });
+  }
+  return parking;
+};
+// Decrement available spots safely
+export const decrementAvailableSpot = async (parkingId) => {
+  if (!parkingId) return null;
+  const parking = await ParkingSpace.findOneAndUpdate(
+    { _id: parkingId, $expr: { $gt: ['$availableSpots', 0] } },
+    { $inc: { availableSpots: -1 } },
+    { new: true }
+  );
+  if (parking && global.io) {
+    global.io.emit('parking-updated', { parkingId: parking._id.toString(), availableSpots: parking.availableSpots });
+  }
+  return parking;
+};
+
+export const isSlotAvailable = (parkingSpace, startTime, endTime) => {
+  const { bufferedStart, bufferedEnd } = applyBuffer(startTime, endTime);
+  return !(parkingSpace.availability || []).some(dateObj =>
+    (dateObj.slots || []).some(slot => {
+      const slotStart = new Date(slot.startTime);
+      const slotEnd = new Date(slot.endTime);
+      return slot.isBooked && (bufferedStart < slotEnd && bufferedEnd > slotStart);
+    })
+  );
 };

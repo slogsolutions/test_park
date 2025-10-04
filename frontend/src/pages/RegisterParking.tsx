@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import axios from 'axios';
 import { Info, MapPin, Star, Upload, Clock, Calendar, Shield, Zap, Eye, Accessibility } from 'lucide-react';
 import Map, { Marker } from 'react-map-gl';
-import { parkingService } from '../services/parking.service';
+// import { parkingService } from '../services/parking.service'; // removed - requests inlined
 import { useMapContext } from '../context/MapContext';
 import LocationSearchBox from '../components/search/LocationSearch';
 import { reverseGeocode } from '../utils/geocoding';
@@ -87,28 +88,17 @@ export default function RegisterParking() {
   // Helper: normalize numeric string to remove leading zeros while preserving decimals like "0.5"
   const normalizeNumericString = (raw: string, allowDecimal = false) => {
     if (typeof raw !== 'string') raw = String(raw ?? '');
-    // trim spaces
     raw = raw.trim();
-
     if (raw === '') return '0';
-
-    // allow negative? not needed here
-    // If decimal allowed:
     if (allowDecimal) {
-      // split integer and fractional parts
       const parts = raw.split('.');
       let intPart = parts[0] ?? '';
       const fracPart = parts[1] ?? '';
-
-      // remove leading zeros from integer part but keep single zero if all zeros or empty
       intPart = intPart.replace(/^0+(?=\d)/, '');
       if (intPart === '') intPart = '0';
-
-      // if user typed multiple dots or non-number, sanitize by taking first two parts only
       const sanitized = fracPart !== '' ? `${intPart}.${fracPart}` : intPart;
       return sanitized;
     } else {
-      // integer only: remove leading zeros but keep single '0'
       const intOnly = raw.replace(/^0+(?=\d)/, '');
       return intOnly === '' ? '0' : intOnly;
     }
@@ -117,58 +107,39 @@ export default function RegisterParking() {
   const validateAll = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Title
     if (!formData.title || formData.title.trim().length < 3) {
       newErrors.title = 'Please enter a title (at least 3 characters).';
     }
-
-    // Description
     if (!formData.description || formData.description.trim().length < 10) {
       newErrors.description = 'Please enter a description (at least 10 characters).';
     }
-
-    // Available spots
     if (!formData.availableSpots || formData.availableSpots < 1) {
       newErrors.availableSpots = 'Enter number of available spots (minimum 1).';
     }
-
-    // Prices
     if (formData.priceParking === undefined || isNaN(formData.priceParking) || Number(formData.priceParking) < 0) {
       newErrors.priceParking = 'Enter a valid base price (≥ 0).';
     }
     if (formData.pricePerHour === undefined || isNaN(formData.pricePerHour) || Number(formData.pricePerHour) < 0) {
       newErrors.pricePerHour = 'Enter a valid late fee (≥ 0).';
     }
-
-    // Discount
     if (formData.discount === undefined || isNaN(formData.discount) || formData.discount < 0 || formData.discount > 100) {
       newErrors.discount = 'Discount must be between 0 and 100.';
     }
-
-    // Address fields
     if (!formData.street || formData.street.trim().length === 0) newErrors.street = 'Street is required.';
     if (!formData.city || formData.city.trim().length === 0) newErrors.city = 'City is required.';
     if (!formData.state || formData.state.trim().length === 0) newErrors.state = 'State is required.';
     if (!formData.zipCode || formData.zipCode.trim().length === 0) newErrors.zipCode = 'ZIP Code is required.';
     if (!formData.country || formData.country.trim().length === 0) newErrors.country = 'Country is required.';
-
-    // Amenities - at least one
     if (!formData.amenities || formData.amenities.length === 0) {
       newErrors.amenities = 'Select at least one amenity.';
     }
-
-    // Photos - require at least one
     if (!formData.photos || formData.photos.length === 0) {
       newErrors.photos = 'Please upload at least one photo.';
     } else {
-      // ensure all are image/* mime types
       const invalidPhoto = Array.from(formData.photos).some((f: any) => !f.type.startsWith('image/'));
-      if (invalidPhoto) {
-        newErrors.photos = 'All photos must be image files.';
-      }
+      if (invalidPhoto) newErrors.photos = 'All photos must be image files.';
     }
 
-    // Marker position (map)
     const lon = Number(markerPosition.longitude);
     const lat = Number(markerPosition.latitude);
     if (isNaN(lon) || isNaN(lat)) {
@@ -177,21 +148,20 @@ export default function RegisterParking() {
 
     setErrors(newErrors);
 
-    // if any error keys present, invalid
     const isValid = Object.keys(newErrors).length === 0;
-    if (!isValid) {
-      toast.error('Please fill all the fields correctly before submitting.');
-    }
+    if (!isValid) toast.error('Please fill all the fields correctly before submitting.');
     return isValid;
+  };
+
+  const API_BASE = process.env.REACT_APP_API_BASE || ''; // adjust as needed
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem('authToken') || '';
+    return token ? { Authorization: `Bearer ${token}` } : {};
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // run full validation (blocks if invalid)
-    if (!validateAll()) {
-      return;
-    }
+    if (!validateAll()) return;
 
     try {
       const address = {
@@ -203,7 +173,6 @@ export default function RegisterParking() {
       };
 
       const { longitude: rawLon, latitude: rawLat } = extractLngLat(markerPosition);
-
       if (rawLon === undefined || rawLat === undefined || isNaN(Number(rawLon)) || isNaN(Number(rawLat))) {
         toast.error('Please pick a valid location on the map before submitting.');
         setErrors(prev => ({ ...prev, location: 'Please pick a valid location on the map.' }));
@@ -212,12 +181,9 @@ export default function RegisterParking() {
 
       const lon = Number(rawLon);
       const lat = Number(rawLat);
-
-      // Photos exist (validator already required at least one)
       const hasPhotos = !!formData.photos && formData.photos.length > 0;
 
       if (!hasPhotos) {
-        // JSON payload path (no files)
         const payload = {
           title: formData.title,
           description: formData.description,
@@ -230,13 +196,18 @@ export default function RegisterParking() {
           discount: Number(formData.discount),
         };
 
-        await parkingService.registerSpaceJSON(payload);
+        const url = `${API_BASE}/api/parkings`; // change if backend route differs
+        const headers = {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+        };
+
+        await axios.post(url, payload, { headers });
         toast.success('Parking space registered successfully!');
         navigate('/');
         return;
       }
 
-      // Multipart path (append photos)
       const data = new FormData();
       data.append('address', JSON.stringify(address));
       data.append('title', formData.title);
@@ -244,19 +215,24 @@ export default function RegisterParking() {
       data.append('pricePerHour', String(formData.pricePerHour));
       data.append('priceParking', String(formData.priceParking));
       data.append('availableSpots', String(formData.availableSpots));
-      data.set('amenities', JSON.stringify(formData.amenities));
-      data.set('discount', String(formData.discount));
+      data.append('amenities', JSON.stringify(formData.amenities));
+      data.append('discount', String(formData.discount));
 
-      if (hasPhotos) {
-        Array.from(formData.photos!).forEach((file) => data.append('photos', file));
+      if (formData.photos && formData.photos.length > 0) {
+        Array.from(formData.photos).forEach((file) => data.append('photos', file));
       }
 
       const locationObj = { type: 'Point', coordinates: [lon, lat] };
-      data.set('location', JSON.stringify(locationObj));
-      data.set('lng', String(lon));
-      data.set('lat', String(lat));
+      data.append('location', JSON.stringify(locationObj));
+      data.append('lng', String(lon));
+      data.append('lat', String(lat));
 
-      await parkingService.registerSpace(data);
+      const url = `${API_BASE}/api/parkings`; // change if backend route differs
+      const headers = {
+        ...getAuthHeaders(),
+      };
+
+      await axios.post(url, data, { headers });
       toast.success('Parking space registered successfully!');
       navigate('/');
     } catch (err: any) {
@@ -285,7 +261,6 @@ export default function RegisterParking() {
       longitude: longitude ?? viewport.longitude,
       zoom: 14,
     });
-    // clear location/address-related errors
     setErrors(prev => ({ ...prev, location: '', street: '', city: '', state: '', zipCode: '', country: '' }));
   };
 
@@ -306,7 +281,6 @@ export default function RegisterParking() {
             zipCode: loc.zipCode || '',
             country: loc.country || '',
           }));
-          // clear address related errors
           setErrors(prev => ({ ...prev, location: '', street: '', city: '', state: '', zipCode: '', country: '' }));
         } catch {
           toast.info('Location set; address lookup failed — edit fields manually if needed.');
@@ -326,7 +300,7 @@ export default function RegisterParking() {
     );
   };
 
-  return (
+  return (<>
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950 text-gray-900 dark:text-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Section */}
@@ -385,7 +359,6 @@ export default function RegisterParking() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                       value={String(formData.availableSpots)}
                       onChange={(e) => {
-                        // normalize leading zeros for integer field
                         const normalized = normalizeNumericString(e.target.value, false);
                         const val = parseInt(normalized || '0', 10);
                         setFormData({ ...formData, availableSpots: isNaN(val) ? 0 : val });
@@ -439,7 +412,6 @@ export default function RegisterParking() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                       value={String(formData.priceParking)}
                       onChange={(e) => {
-                        // normalize leading zeros but keep decimals
                         const normalized = normalizeNumericString(e.target.value, true);
                         const v = parseFloat(normalized || '0');
                         setFormData({ ...formData, priceParking: isNaN(v) ? 0 : v });
@@ -483,7 +455,6 @@ export default function RegisterParking() {
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
                       value={String(formData.discount)}
                       onChange={(e) => {
-                        // integer-like behavior for discount (no unwanted leading zeros)
                         const normalized = normalizeNumericString(e.target.value, false);
                         let v = parseInt(normalized || '0', 10);
                         if (isNaN(v)) v = 0;
@@ -497,7 +468,6 @@ export default function RegisterParking() {
                   </div>
                 </div>
 
-                {/* Price Display */}
                 {formData.discount > 0 && (
                   <div className="mt-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 rounded-xl border border-green-200 dark:border-green-800">
                     <div className="flex justify-between items-center">
@@ -600,7 +570,6 @@ export default function RegisterParking() {
                         accept="image/*"
                         className="hidden"
                         onChange={(e) => {
-                          // use currentTarget.files for consistency
                           setFormData({ ...formData, photos: e.currentTarget.files });
                           setErrors(prev => ({ ...prev, photos: '' }));
                         }}
@@ -817,9 +786,10 @@ export default function RegisterParking() {
                 </ul>
               </div>
             </div>
-          </div>
         </div>
       </div>
     </div>
+    </div>
+    </>
   );
 }

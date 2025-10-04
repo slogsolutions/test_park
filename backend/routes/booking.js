@@ -11,40 +11,40 @@ import {
   getProviderBookings,
   generateOTP,
   verifyOTP,
-  verifySecondOtp
+  verifySecondOtp,
+  extendBooking
 } from '../controllers/booking.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
 
 const router = express.Router();
 
-// Booking CRUD & listing
+/* -------------------- Booking CRUD & Listing -------------------- */
 router.post('/', protect, createBooking);
 router.get('/my-bookings', protect, getMyBookings);
 router.get('/provider-bookings', protect, getProviderBookings);
+router.get('/:id', protect, getBookingById);
+router.delete('/:bookingId', protect, deleteById);
 
-// OTP endpoints
+/* -------------------- Booking Status -------------------- */
+router.put('/:id/status', protect, updateBookingStatus);
+
+/* -------------------- OTP Routes -------------------- */
 router.post('/:id/generate-otp', protect, generateOTP);
 router.post('/:id/verify-otp', protect, verifyOTP);
 router.post('/:id/verify-second-otp', protect, verifySecondOtp);
 
-// Status route
-router.put('/:id/status', protect, updateBookingStatus);
+/* -------------------- Extend Booking -------------------- */
+router.post('/:id/extend', protect, extendBooking);
 
-// Single booking, delete
-router.get('/:id', protect, getBookingById);
-router.delete('/:bookingId', protect, deleteById);
-
-// Payment status update (existing)
-router.put("/:id/update-payment-status", protect, async (req, res) => {
+/* -------------------- Payment Status Update -------------------- */
+router.put('/:id/update-payment-status', protect, async (req, res) => {
   const { id } = req.params;
   const { paymentStatus } = req.body;
 
   try {
     const booking = await Booking.findById(id);
-    if (!booking) {
-      return res.status(404).json({ message: "Booking not found" });
-    }
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.paymentStatus = paymentStatus;
     await booking.save();
@@ -56,8 +56,7 @@ router.put("/:id/update-payment-status", protect, async (req, res) => {
   }
 });
 
-
-// Vehicle routes kept as-is in original file (if needed)
+/* -------------------- Vehicle Routes -------------------- */
 router.post('/add-vehicle', protect, async (req, res) => {
   const { make, model, year, licensePlate, chassisNumber, registrationDate } = req.body;
 
@@ -67,10 +66,7 @@ router.post('/add-vehicle', protect, async (req, res) => {
 
   try {
     const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found.' });
 
     user.vehicles.push({ make, model, year, licensePlate, chassisNumber, registrationDate });
     await user.save();
@@ -85,9 +81,8 @@ router.post('/add-vehicle', protect, async (req, res) => {
 router.get('/data/vehicles', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
     res.status(200).json(user.vehicles || []);
   } catch (error) {
     console.error('Error fetching vehicles:', error.message);
@@ -100,14 +95,10 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
 
   try {
     const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
+    if (!user) return res.status(404).json({ message: 'User not found.' });
 
     const vehicleIndex = user.vehicles.findIndex(vehicle => vehicle._id.toString() === vehicleId);
-    if (vehicleIndex === -1) {
-      return res.status(404).json({ message: 'Vehicle not found.' });
-    }
+    if (vehicleIndex === -1) return res.status(404).json({ message: 'Vehicle not found.' });
 
     user.vehicles.splice(vehicleIndex, 1);
     await user.save();
@@ -118,17 +109,5 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
-
-
-
-// backend/routes/booking.js
-// ...existing imports
-import { extendBooking } from '../controllers/booking.js'; // add this import
-
-// ... existing router declarations
-
-// Add extend route (best placed near other booking endpoints)
-router.post('/:id/extend', protect, extendBooking);
-
 
 export default router;

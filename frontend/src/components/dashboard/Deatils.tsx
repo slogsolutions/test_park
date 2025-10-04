@@ -22,31 +22,29 @@ export function ProviderDashboard() {
     
       const API_BASE_URL = import.meta.env.VITE_BASE_URL;
     
-      useEffect(() => {
-        const fetchData = async () => {
-          try {
-            const token = localStorage.getItem('token');
-            const headers = { Authorization: `Bearer ${token}` };
-    
-            // Fetch provider details
-            const providerRes = await axios.get(`${API_BASE_URL}/api/auth/me`, { headers });
-            console.log(provider);
-            
-            setProvider(providerRes.data);
-    
-            // Fetch provider bookings
-            const bookingsRes = await axios.get(`${API_BASE_URL}/api/booking/provider-bookings`, { headers });
-            setBookings(bookingsRes.data);
-    
-          } catch (error) {
-            console.error('Error fetching data:', error);
-          } finally {
-            setLoading(false);
-          }
-        };
-    
-        fetchData();
-      }, []);
+     useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Fetch provider details
+      const providerRes = await axios.get(`${API_BASE_URL}/api/auth/me`, { headers });
+      setProvider(providerRes.data);
+
+      // Fetch provider bookings (corrected endpoint)
+      const bookingsRes = await axios.get(`${API_BASE_URL}/api/bookings/provider-bookings`, { headers });
+      setBookings(bookingsRes.data);
+
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, []);
     
     
   return (
