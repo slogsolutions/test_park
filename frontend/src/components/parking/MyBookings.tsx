@@ -20,6 +20,12 @@ import {
 import { MdTimer, MdPayment, MdDirectionsCar } from "react-icons/md";
 import LoadingScreen from "../../pages/LoadingScreen";
 
+type Refund = {
+  percent?: number;
+  amount?: number;
+  processedAt?: string | null;
+};
+
 type Booking = {
   _id: string;
   parkingSpace: any | null;
@@ -34,6 +40,8 @@ type Booking = {
   secondOtpExpires?: string | null;
   otp?: string | null;
   otpExpires?: string | null;
+  // NEW: refund metadata returned by backend
+  refund?: Refund | null;
 };
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
@@ -184,6 +192,27 @@ const MyBookings: React.FC = () => {
     };
   };
 
+  // new helper: hours until start (can be fractional)
+  const getHoursUntilStart = (booking: Booking) => {
+    if (!booking.startTime) return -Infinity;
+    const startTs = new Date(booking.startTime).getTime();
+    if (isNaN(startTs)) return -Infinity;
+    return (startTs - Date.now()) / (1000 * 60 * 60);
+  };
+
+  // Determine cancel refund percent based on rules:
+  // > 3 hours => 60% refund
+  // > 2 hours => 40% refund
+  // > 1 hour => 10% refund
+  // <= 1 hour => not allowed
+  const getCancelRefundPercent = (booking: Booking) => {
+    const hoursUntil = getHoursUntilStart(booking);
+    if (hoursUntil > 3) return 60;
+    if (hoursUntil > 2) return 40;
+    if (hoursUntil > 1) return 10;
+    return 0;
+  };
+
   // Format address object to string
   const formatAddress = (address: any): string => {
     if (!address) return "Location not specified";
@@ -209,17 +238,55 @@ const MyBookings: React.FC = () => {
     return Date.now() >= startTs - 15 * 60 * 1000;
   };
 
+  // whether user can cancel (only if > 1 hour until start)
+  const canCancel = (booking: Booking) => {
+    return getHoursUntilStart(booking) > 1;
+  };
+
   // ---------------- actions ----------------
-  const handleCancelBooking = async (bookingId: string) => {
+  // Updated: accept booking object so we can compute refund & confirm with user
+  const handleCancelBooking = async (booking: Booking) => {
     try {
-      await axios.delete(`${API_BASE}/api/booking/${bookingId}`, {
+      const totals = computeTotalsForBooking(booking);
+      // use discountedTotal as paid amount (fallback to originalTotal)
+      const paidAmount = Number(booking.totalPrice ?? totals.discountedTotal ?? totals.originalTotal ?? 0);
+      const refundPercent = getCancelRefundPercent(booking);
+
+      if (refundPercent <= 0) {
+        alert("Cancellation not allowed within 1 hour of start time.");
+        return;
+      }
+
+      const refundAmount = +(paidAmount * (refundPercent / 100));
+      const retainedAmount = +(paidAmount - refundAmount);
+
+      const confirmMsg = `Cancel booking?\n\nPaid: ₹${paidAmount.toFixed(2)}\nRefund: ₹${refundAmount.toFixed(2)} (${refundPercent}%)\nRetained by provider: ₹${retainedAmount.toFixed(2)}\n\nProceed with cancellation?`;
+      if (!window.confirm(confirmMsg)) return;
+
+      // Send DELETE with refundPercent (backend should process refund accordingly).
+      // axios.delete allows a `data` field for payload.
+      const response = await axios.delete(`${API_BASE}/api/booking/${booking._id}`, {
+        data: { refundPercent },
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
       });
-      setBookings((prev) => prev.filter((b) => b._id !== bookingId));
-      alert("Booking cancelled successfully");
-    } catch (err) {
+
+      // If server returns updated booking list or object, respect it; else remove locally
+      if (response?.data?.booking) {
+        const returned = response.data.booking;
+        setBookings((prev) => prev.map((b) => (b._id === returned._id ? returned : b)));
+      } else if (response?.data?.success === false) {
+        // Server explicitly refused
+        alert(response.data.message || "Cancellation failed on server");
+      } else {
+        // assume deleted
+        setBookings((prev) => prev.filter((b) => b._id !== booking._id));
+      }
+
+      alert(`Booking cancelled. Refund: ₹${refundAmount.toFixed(2)} (${refundPercent}%).`);
+    } catch (err: any) {
       console.error("cancel booking error:", err);
-      alert("Failed to cancel booking");
+      const msg = err?.response?.data?.message ?? "Failed to cancel booking";
+      alert(msg);
     }
   };
 
@@ -368,8 +435,10 @@ const MyBookings: React.FC = () => {
 
       const totals = computeTotalsForBooking(booking);
       const fallbackPerHour = totals.perHour || 0;
-      const bookingTotalPrice = Number(booking.totalPrice ?? 0);
-      const fineAmount = overdueHours * 0.5 * (bookingTotalPrice > 0 ? bookingTotalPrice : fallbackPerHour);
+      // const bookingTotalPrice = Number(booking.totalPrice ?? 0);
+      // const fineAmount = overdueHours * 0.5 * (bookingTotalPrice > 0 ? bookingTotalPrice : fallbackPerHour);
+      const bookingTotalPrice = Number(booking.pricePerHour ?? 0);
+      const fineAmount = 100 + overdueHours * (bookingTotalPrice > 0 ? bookingTotalPrice : fallbackPerHour);
       const fineInPaise = Math.round(fineAmount * 100);
 
       await loadRazorpayScript();
@@ -413,7 +482,7 @@ const MyBookings: React.FC = () => {
             }
 
             if (returnedOtpObj?.otp) {
-              setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: returnedOtpObj.otp, expiresAt: returnedOtpObj.expiresAt } }));
+              setGeneratedOtps((prev) => ({ ...prev, [booking._id]: { otp: returnedOtpObj.otp, expiresAt: returnedOtpObj.expiresAt } })); 
               alert(`Fine paid. Checkout OTP generated: ${returnedOtpObj.otp}. Provide this to provider to checkout.`);
               // Do NOT auto-complete booking — provider must verify second OTP via provider UI/API
               return;
@@ -489,6 +558,8 @@ const MyBookings: React.FC = () => {
         return { label: "Rejected", color: "text-red-600", bgColor: "bg-red-100", borderColor: "border-red-200", icon: FaTimesCircle };
       case "completed":
         return { label: "Completed", color: "text-gray-600", bgColor: "bg-gray-100", borderColor: "border-gray-200", icon: FaHistory };
+      case "cancelled":
+        return { label: "Cancelled", color: "text-red-600", bgColor: "bg-red-50", borderColor: "border-red-200", icon: FaTimesCircle };
       default:
         return { label: s ?? "Unknown", color: "text-gray-600", bgColor: "bg-gray-100", borderColor: "border-gray-200", icon: FaClock };
     }
@@ -660,6 +731,14 @@ const MyBookings: React.FC = () => {
               const hasEnded = !isNaN(endTs) && now > endTs;
               const showPayFine = hasEnded && booking.status !== "completed";
 
+              // cancellation eligibility and refund percent
+              const refundPercent = getCancelRefundPercent(booking);
+              const paidAmount = Number(booking.totalPrice ?? totals.discountedTotal ?? totals.originalTotal ?? 0);
+              const refundAmount = +(paidAmount * (refundPercent / 100));
+
+              // Determine if refunded metadata present
+              const hasRefund = !!(booking.refund && booking.refund.amount && booking.refund.amount > 0) || booking.paymentStatus === 'refunded';
+
               return (
                 <div 
                   key={booking._id} 
@@ -728,20 +807,41 @@ const MyBookings: React.FC = () => {
                           ) : (
                             <div className="text-2xl font-bold text-gray-800">₹{totals.originalTotal.toFixed(2)}</div>
                           )}
+
+                          {/* NEW: show refund info when present */}
+                          {hasRefund && (
+                            <div className="mt-3 inline-flex items-center gap-3">
+                              <div className="text-sm font-semibold text-red-600">
+                                Refunded: ₹{(booking.refund?.amount ?? 0).toFixed(2)}
+                                {booking.refund?.percent ? ` (${booking.refund.percent}% )` : booking.paymentStatus === 'refunded' ? ' (refunded)' : ''}
+                              </div>
+                              {booking.refund?.processedAt && (
+                                <div className="text-xs text-gray-500">on {new Date(booking.refund.processedAt).toLocaleString()}</div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Action Buttons */}
                     <div className="space-y-3 pt-4">
-                      {booking.status === "pending" && (
+                      { /* Show cancel when booking is upcoming (pending/accepted/confirmed) and allowed by time rules */ }
+                      {["pending","accepted","confirmed"].includes(booking.status ?? "") && canCancel(booking) && (
                         <button 
-                          onClick={() => handleCancelBooking(booking._id)} 
+                          onClick={() => handleCancelBooking(booking)} 
                           className="w-full bg-gradient-to-r from-red-500 to-red-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"
                         >
                           <FaTimesCircle className="text-lg" />
-                          Cancel Booking
+                          Cancel Booking {refundPercent > 0 ? `- Refund ₹${refundAmount.toFixed(2)} (${refundPercent}%)` : ""}
                         </button>
+                      )}
+
+                      {/* If cancellation not allowed because <1 hour left, optionally show disabled button or nothing */ }
+                      {["pending","accepted","confirmed"].includes(booking.status ?? "") && !canCancel(booking) && (
+                        <div className="text-center text-sm text-red-600 font-medium">
+                          Cancellation not available within 1 hour of start time
+                        </div>
                       )}
 
                       {showPayNow && (
@@ -815,7 +915,7 @@ const MyBookings: React.FC = () => {
                       )}
 
                       {/* Track button for paid bookings */}
-                      {booking.paymentStatus === "paid" && booking.status !== "completed" && !isActive && (
+                      {booking.paymentStatus === "paid" && booking.status !== "cancelled" && booking.status !== "completed" && !isActive && (
                         <button 
                           onClick={() => handleTrackNow(booking)} 
                           className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold py-3 px-4 rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl flex items-center justify-center gap-2"

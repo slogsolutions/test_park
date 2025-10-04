@@ -1,5 +1,3 @@
-// backend/routes/booking.js
-
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import {
@@ -11,7 +9,8 @@ import {
   getProviderBookings,
   generateOTP,
   verifyOTP,
-  verifySecondOtp
+  verifySecondOtp,
+  extendBooking
 } from '../controllers/booking.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
@@ -31,9 +30,12 @@ router.post('/:id/verify-second-otp', protect, verifySecondOtp);
 // Status route
 router.put('/:id/status', protect, updateBookingStatus);
 
-// Single booking, delete
+// Single booking, cancel (DELETE) — frontend calls DELETE /api/booking/:bookingId with body { refundPercent }
 router.get('/:id', protect, getBookingById);
 router.delete('/:bookingId', protect, deleteById);
+
+// Extend route (payment flow may call this, kept for compatibility)
+router.post('/:id/extend', protect, extendBooking);
 
 // Payment status update (existing)
 router.put("/:id/update-payment-status", protect, async (req, res) => {
@@ -55,7 +57,6 @@ router.put("/:id/update-payment-status", protect, async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-
 
 // Vehicle routes kept as-is in original file (if needed)
 router.post('/add-vehicle', protect, async (req, res) => {
@@ -118,17 +119,5 @@ router.delete('/data/vehicles/:vehicleId', protect, async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
-
-
-
-// backend/routes/booking.js
-// ...existing imports
-import { extendBooking } from '../controllers/booking.js'; // add this import
-
-// ... existing router declarations
-
-// Add extend route (best placed near other booking endpoints)
-router.post('/:id/extend', protect, extendBooking);
-
 
 export default router;
