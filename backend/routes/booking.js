@@ -35,20 +35,8 @@ router.post('/:id/verify-second-otp', protect, verifySecondOtp);
 /* -------------------- Extend Booking -------------------- */
 router.post('/:id/extend', protect, extendBooking);
 
-<<<<<<< HEAD
 /* -------------------- Payment Status Update -------------------- */
 router.put('/:id/update-payment-status', protect, async (req, res) => {
-=======
-// Single booking, cancel (DELETE) — frontend calls DELETE /api/booking/:bookingId with body { refundPercent }
-router.get('/:id', protect, getBookingById);
-router.delete('/:bookingId', protect, deleteById);
-
-// Extend route (payment flow may call this, kept for compatibility)
-router.post('/:id/extend', protect, extendBooking);
-
-// Payment status update (existing)
-router.put("/:id/update-payment-status", protect, async (req, res) => {
->>>>>>> b4b4e0bfe901642611cb16f87502d76695a57e70
   const { id } = req.params;
   const { paymentStatus } = req.body;
 
@@ -66,11 +54,7 @@ router.put("/:id/update-payment-status", protect, async (req, res) => {
   }
 });
 
-<<<<<<< HEAD
 /* -------------------- Vehicle Routes -------------------- */
-=======
-// Vehicle routes kept as-is in original file (if needed)
->>>>>>> b4b4e0bfe901642611cb16f87502d76695a57e70
 router.post('/add-vehicle', protect, async (req, res) => {
   const { make, model, year, licensePlate, chassisNumber, registrationDate } = req.body;
 
