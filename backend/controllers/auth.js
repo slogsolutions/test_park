@@ -323,14 +323,20 @@ export const googleAuth = async (req, res) => {
     const token = generateToken(user._id);
 
     res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        isVerified: user.isVerified,
-      },
-    });
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    isVerified: user.isVerified,
+    phone: user.phone || null,
+    phoneVerified: !!user.phoneVerified,
+    kycStatus: user.kycStatus || null,     // or kycCompleted flag if you use that
+    role: user.role || null,
+    // add other safe fields you want available immediately
+  },
+});
+
   } catch (error) {
     res.status(500).json({ message: 'Google authentication failed' });
   }
