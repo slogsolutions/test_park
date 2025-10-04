@@ -95,7 +95,10 @@ router.patch('/parkingspaces/:id/status', protect, captainOnly, async (req, res)
     }
 
     // map to schema-safe status values
-    const newStatus = isApprove ? 'submitted' : 'pending';
+    // map to schema-safe status values
+// Approve => 'approved', Reject => 'rejected'
+const newStatus = isApprove ? 'approved' : 'rejected';
+
 
     // build update using $set / $unset to avoid setting undefined
     const update = { $set: { status: newStatus } };
