@@ -4,6 +4,7 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { protect } from '../middleware/auth.js';
 import Booking from '../models/Booking.js';
+import { scheduleBookingEndReminders } from '../utils/notificationScheduler.js';
 
 const router = express.Router();
 
@@ -138,6 +139,11 @@ router.post('/verify-payment', protect, async (req, res) => {
     }
 
     await booking.save();
+
+    //send notification after paid
+if (booking.paymentStatus === 'paid') {
+  scheduleBookingEndReminders(booking);
+}
 
     // Load populated booking for return and emit via socket
     const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');

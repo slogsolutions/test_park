@@ -4,7 +4,10 @@ import ParkingSpace from '../models/ParkingSpace.js';
 import ParkFinderSecondUser from '../models/User.js';
 import UserToken from '../models/UserToken.js';
 import NotificationService from '../service/NotificationService.js';
-
+// import NotificationService from "../services/NotificationService.js";
+// import UserToken from "../models/UserToken.js";
+// import Booking from "../models/Booking.js";
+// import { releaseParkingSpot } from "../utils/parkingUtils.js";
 // Simple notification placeholder
 const sendNotification = (email, subject, message) => {
   console.log(`Notification sent to ${email}: ${subject} - ${message}`);
@@ -228,46 +231,138 @@ export const getProviderBookings = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch provider bookings', error: err.message });
   }
 };
+  //  OLD
+// export const updateBookingStatus = async (req, res) => {
+//   try {
+//     const { status } = req.body;
+//     const bookingId = req.params.id;
+//     const allowed = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled', 'overdue'];
+//     if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
+
+//     const booking = await Booking.findById(bookingId);
+//     if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+//     booking.status = status;
+//     if (status === 'accepted') booking.providerId = req.user._id;
+//     if (status === 'completed') {
+//       booking.completedAt = new Date();
+//       if (!booking.endedAt) booking.endedAt = booking.completedAt;
+//       if (!booking.endTime) booking.endTime = booking.sessionEndAt ?? booking.completedAt;
+//       if (booking.parkingSpace) {
+//         try { await releaseParkingSpot(booking.parkingSpace, booking); } catch (e) { console.warn('release failed on manual complete', e); }
+//       }
+//     }
+
+//     await booking.save();
+
+//     try {
+//       if (global.io) {
+//         const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+//         global.io.emit('booking-updated', { booking: populated });
+//       }
+//     } catch (emitErr) {
+//       console.warn('[updateBookingStatus] emit error', emitErr);
+//     }
+
+//     const freshBooking = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+//     res.status(200).json({ message: 'Booking status updated successfully', booking: freshBooking });
+//   } catch (error) {
+//     console.error('updateBookingStatus error', error);
+//     res.status(500).json({ message: 'Failed to update booking status', error: error.message });
+//   }
+// };
+
+
 
 export const updateBookingStatus = async (req, res) => {
   try {
     const { status } = req.body;
     const bookingId = req.params.id;
-    const allowed = ['pending', 'accepted', 'rejected', 'confirmed', 'completed', 'cancelled', 'overdue'];
-    if (!allowed.includes(status)) return res.status(400).json({ message: 'Invalid status' });
 
-    const booking = await Booking.findById(bookingId);
-    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+    const allowed = [
+      "pending", "accepted", "rejected", "confirmed",
+      "completed", "cancelled", "overdue"
+    ];
+    if (!allowed.includes(status))
+      return res.status(400).json({ message: "Invalid status" });
+
+    const booking = await Booking.findById(bookingId).populate("user", "name email");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.status = status;
-    if (status === 'accepted') booking.providerId = req.user._id;
-    if (status === 'completed') {
+    if (status === "accepted") booking.providerId = req.user._id;
+    if (status === "completed") {
       booking.completedAt = new Date();
       if (!booking.endedAt) booking.endedAt = booking.completedAt;
       if (!booking.endTime) booking.endTime = booking.sessionEndAt ?? booking.completedAt;
       if (booking.parkingSpace) {
-        try { await releaseParkingSpot(booking.parkingSpace, booking); } catch (e) { console.warn('release failed on manual complete', e); }
+        try {
+          // await releaseParkingSpot(booking.parkingSpace, booking);
+          console.log("release logic will come here")
+        } catch (e) {
+          console.warn("release failed on manual complete", e);
+        }
       }
     }
 
     await booking.save();
 
+    // Emit via Socket.IO if needed
     try {
       if (global.io) {
-        const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
-        global.io.emit('booking-updated', { booking: populated });
+        const populated = await Booking.findById(booking._id)
+          .populate("parkingSpace")
+          .populate("user", "name email");
+        global.io.emit("booking-updated", { booking: populated });
       }
     } catch (emitErr) {
-      console.warn('[updateBookingStatus] emit error', emitErr);
+      console.warn("[updateBookingStatus] emit error", emitErr);
     }
 
-    const freshBooking = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
-    res.status(200).json({ message: 'Booking status updated successfully', booking: freshBooking });
+    // ✅ Send FCM Notification
+    try {
+      const userId = booking.user?._id;
+      if (userId) {
+        // Fetch all device tokens for this user
+        const userTokens = await UserToken.find({ userId }).select("token -_id");
+        const tokens = userTokens.map(t => t.token);
+
+        if (tokens.length > 0) {
+          const title = `Booking ${status}`;
+          const body = `Your booking has been ${status}.`;
+
+          if (tokens.length === 1) {
+            await NotificationService.sendToDevice(tokens[0], title, body);
+          } else {
+            await NotificationService.sendToMultiple(tokens, title, body);
+          }
+
+          console.log(`[FCM] Sent '${status}' notification to user ${userId}`);
+        } else {
+          console.warn(`[FCM] No tokens found for user ${userId}`);
+        }
+      }
+    } catch (notifErr) {
+      console.error("[updateBookingStatus] Notification error", notifErr);
+    }
+
+    const freshBooking = await Booking.findById(booking._id)
+      .populate("parkingSpace")
+      .populate("user", "name email");
+
+    res.status(200).json({
+      message: "Booking status updated successfully",
+      booking: freshBooking,
+    });
   } catch (error) {
-    console.error('updateBookingStatus error', error);
-    res.status(500).json({ message: 'Failed to update booking status', error: error.message });
+    console.error("updateBookingStatus error", error);
+    res
+      .status(500)
+      .json({ message: "Failed to update booking status", error: error.message });
   }
 };
+
+
 
 export const getBookingById = async (req, res) => {
   try {
@@ -300,6 +395,131 @@ export const getBookingById = async (req, res) => {
  * - Not allowed within 1 hour of startTime
  * - Marks booking.status = 'cancelled', records refund details, unmarks availability slot (best-effort), emits update
  */
+// export const deleteById = async (req, res) => {
+//   try {
+//     const { bookingId } = req.params;
+//     const requesterId = req.user._id;
+
+//     if (!mongoose.Types.ObjectId.isValid(bookingId)) return res.status(400).json({ message: 'Invalid booking id' });
+
+//     const booking = await Booking.findById(bookingId);
+//     if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+//     // Only booking owner (buyer) may cancel via this endpoint
+//     if (!booking.user || booking.user.toString() !== requesterId.toString()) {
+//       return res.status(403).json({ message: 'Not authorized to cancel this booking' });
+//     }
+
+//     // Do not allow cancelling completed/active/overdue bookings via this endpoint.
+//     if (['completed', 'active', 'overdue', 'cancelled'].includes(booking.status)) {
+//       return res.status(400).json({ message: `Cannot cancel booking in status '${booking.status}'` });
+//     }
+
+//     // Determine hours until start
+//     let hoursUntilStart = Infinity;
+//     if (booking.startTime) {
+//       const startTs = new Date(booking.startTime).getTime();
+//       if (!isNaN(startTs)) {
+//         hoursUntilStart = (startTs - Date.now()) / (1000 * 60 * 60);
+//       }
+//     }
+
+//     // Cancellation not allowed within 1 hour
+//     if (hoursUntilStart <= 1) {
+//       return res.status(400).json({ message: 'Cancellation not allowed within 1 hour of start time' });
+//     }
+
+//     // Compute refundPercent:
+//     // frontend rules: >3 => 60, >2 => 40, >1 => 10, <=1 => 0
+//     const computeCancelRefundPercent = (hrs) => {
+//       if (hrs > 3) return 60;
+//       if (hrs > 2) return 40;
+//       if (hrs > 1) return 10;
+//       return 0;
+//     };
+
+//     // If client passed refundPercent, prefer validated value; otherwise compute
+//     let requestedPercent = Number.isFinite(Number(req.body?.refundPercent)) ? Number(req.body.refundPercent) : null;
+//     let refundPercent = computeCancelRefundPercent(hoursUntilStart);
+//     if (requestedPercent !== null && !isNaN(requestedPercent)) {
+//       // don't allow arbitrary percent; clamp to computed percent (can't be larger than allowed)
+//       // allow smaller percent only if requested and valid (but typically client shouldn't override)
+//       requestedPercent = Math.max(0, Math.min(100, requestedPercent));
+//       // only accept requested percent if it is <= computed max percent, otherwise ignore
+//       if (requestedPercent <= refundPercent) {
+//         refundPercent = requestedPercent;
+//       }
+//     }
+
+//     // Determine paid amount (best-effort)
+//     // Prefer booking.totalPrice, otherwise try pricePerHour * duration
+//     let paidAmount = Number(booking.totalPrice ?? 0);
+//     if (!paidAmount || paidAmount <= 0) {
+//       const startTs = booking.startTime ? new Date(booking.startTime).getTime() : null;
+//       const endTs = booking.endTime ? new Date(booking.endTime).getTime() : null;
+//       let hours = 1;
+//       if (startTs && endTs && !isNaN(startTs) && !isNaN(endTs) && endTs > startTs) {
+//         hours = Math.max(1, Math.ceil((endTs - startTs) / (1000 * 60 * 60)));
+//       }
+//       const perHour = Number(booking.pricePerHour ?? booking.priceParking ?? 0) || 0;
+//       paidAmount = +(perHour * hours);
+//     }
+
+//     const refundAmount = +(paidAmount * (refundPercent / 100));
+
+//     // Mark booking as cancelled and attach refund meta
+//     booking.status = 'cancelled';
+//     booking.cancelledAt = new Date();
+//     booking.refund = {
+//       percent: refundPercent,
+//       amount: refundAmount,
+//     };
+//     // Optionally note who cancelled
+//     booking.cancelledBy = requesterId;
+
+//     // Try to unmark availability slot (best-effort)
+//     try {
+//       if (booking.parkingSpace && booking.startTime && booking.endTime) {
+//         const startDateMidnight = new Date(booking.startTime);
+//         startDateMidnight.setHours(0, 0, 0, 0);
+//         await ParkingSpace.findByIdAndUpdate(
+//           booking.parkingSpace,
+//           { $set: { 'availability.$[dateElem].slots.$[slotElem].isBooked': false } },
+//           { arrayFilters: [{ 'dateElem.date': { $eq: startDateMidnight } }, { 'slotElem.startTime': new Date(booking.startTime), 'slotElem.endTime': new Date(booking.endTime) }], new: true }
+//         );
+//       }
+//     } catch (unmarkErr) {
+//       console.warn('Warning: failed to unmark availability slot (nonfatal)', unmarkErr);
+//     }
+
+//     await booking.save();
+
+//     // emit update to sockets
+//     try {
+//       if (global.io) {
+//         const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+//         global.io.emit('booking-updated', { booking: populated });
+//       }
+//     } catch (emitErr) {
+//       console.warn('[deleteById] emit error', emitErr);
+//     }
+
+//     // NOTE: actual payment gateway refund processing should be triggered here if integrated.
+//     // For example, queue a refund job with the payment provider using booking.paymentIntentId or similar.
+//     // This implementation only records refund amount on the booking and expects a separate payment/refund job to run.
+
+//     return res.status(200).json({
+//       message: 'Booking cancelled successfully',
+//       booking: await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email'),
+//       refundAmount,
+//       refundPercent
+//     });
+//   } catch (err) {
+//     console.error('deleteById error:', err);
+//     return res.status(500).json({ message: 'Failed to cancel booking', error: err.message });
+//   }
+// };
+
 export const deleteById = async (req, res) => {
   try {
     const { bookingId } = req.params;
@@ -310,17 +530,14 @@ export const deleteById = async (req, res) => {
     const booking = await Booking.findById(bookingId);
     if (!booking) return res.status(404).json({ message: 'Booking not found' });
 
-    // Only booking owner (buyer) may cancel via this endpoint
     if (!booking.user || booking.user.toString() !== requesterId.toString()) {
       return res.status(403).json({ message: 'Not authorized to cancel this booking' });
     }
 
-    // Do not allow cancelling completed/active/overdue bookings via this endpoint.
     if (['completed', 'active', 'overdue', 'cancelled'].includes(booking.status)) {
       return res.status(400).json({ message: `Cannot cancel booking in status '${booking.status}'` });
     }
 
-    // Determine hours until start
     let hoursUntilStart = Infinity;
     if (booking.startTime) {
       const startTs = new Date(booking.startTime).getTime();
@@ -329,13 +546,10 @@ export const deleteById = async (req, res) => {
       }
     }
 
-    // Cancellation not allowed within 1 hour
     if (hoursUntilStart <= 1) {
       return res.status(400).json({ message: 'Cancellation not allowed within 1 hour of start time' });
     }
 
-    // Compute refundPercent:
-    // frontend rules: >3 => 60, >2 => 40, >1 => 10, <=1 => 0
     const computeCancelRefundPercent = (hrs) => {
       if (hrs > 3) return 60;
       if (hrs > 2) return 40;
@@ -343,21 +557,15 @@ export const deleteById = async (req, res) => {
       return 0;
     };
 
-    // If client passed refundPercent, prefer validated value; otherwise compute
     let requestedPercent = Number.isFinite(Number(req.body?.refundPercent)) ? Number(req.body.refundPercent) : null;
     let refundPercent = computeCancelRefundPercent(hoursUntilStart);
     if (requestedPercent !== null && !isNaN(requestedPercent)) {
-      // don't allow arbitrary percent; clamp to computed percent (can't be larger than allowed)
-      // allow smaller percent only if requested and valid (but typically client shouldn't override)
       requestedPercent = Math.max(0, Math.min(100, requestedPercent));
-      // only accept requested percent if it is <= computed max percent, otherwise ignore
       if (requestedPercent <= refundPercent) {
         refundPercent = requestedPercent;
       }
     }
 
-    // Determine paid amount (best-effort)
-    // Prefer booking.totalPrice, otherwise try pricePerHour * duration
     let paidAmount = Number(booking.totalPrice ?? 0);
     if (!paidAmount || paidAmount <= 0) {
       const startTs = booking.startTime ? new Date(booking.startTime).getTime() : null;
@@ -372,17 +580,14 @@ export const deleteById = async (req, res) => {
 
     const refundAmount = +(paidAmount * (refundPercent / 100));
 
-    // Mark booking as cancelled and attach refund meta
     booking.status = 'cancelled';
     booking.cancelledAt = new Date();
     booking.refund = {
       percent: refundPercent,
       amount: refundAmount,
     };
-    // Optionally note who cancelled
     booking.cancelledBy = requesterId;
 
-    // Try to unmark availability slot (best-effort)
     try {
       if (booking.parkingSpace && booking.startTime && booking.endTime) {
         const startDateMidnight = new Date(booking.startTime);
@@ -409,9 +614,43 @@ export const deleteById = async (req, res) => {
       console.warn('[deleteById] emit error', emitErr);
     }
 
-    // NOTE: actual payment gateway refund processing should be triggered here if integrated.
-    // For example, queue a refund job with the payment provider using booking.paymentIntentId or similar.
-    // This implementation only records refund amount on the booking and expects a separate payment/refund job to run.
+    // === FCM NOTIFICATION: START ===
+    // Where I added it: right after saving the cancelled booking and emitting via socket.io
+    try {
+      const userId = booking.user; // may be ObjectId
+      if (userId) {
+        // get tokens for the booking owner
+        const docs = await UserToken.find({ userId }).select('token -_id');
+        const tokens = docs.map(d => d.token).filter(Boolean);
+
+        if (tokens.length > 0) {
+          const title = `Booking cancelled`;
+          // include refund info in body (keeps message short)
+          const body = `Your booking has been cancelled. Refund: ₹${refundAmount.toFixed(2)} (${refundPercent}%).`;
+
+          // NotificationService should handle batching as necessary.
+          // If you don't have batching inside NotificationService, we'll split into 500-token chunks here.
+          const MAX_BATCH = 500;
+          for (let i = 0; i < tokens.length; i += MAX_BATCH) {
+            const chunk = tokens.slice(i, i + MAX_BATCH);
+            if (chunk.length === 1) {
+              await NotificationService.sendToDevice(chunk[0], title, body);
+            } else {
+              await NotificationService.sendToMultiple(chunk, title, body);
+            }
+          }
+
+          console.log(`[FCM] Sent cancellation notification to user ${userId} (${tokens.length} tokens)`);
+        } else {
+          console.warn(`[FCM] No device tokens found for user ${userId}`);
+        }
+      }
+    } catch (notifErr) {
+      // log but do not fail the cancellation flow
+      console.error('[deleteById] Notification error', notifErr);
+      // Optional: collect invalid tokens from NotificationService response and remove them
+    }
+    // === FCM NOTIFICATION: END ===
 
     return res.status(200).json({
       message: 'Booking cancelled successfully',
@@ -424,7 +663,6 @@ export const deleteById = async (req, res) => {
     return res.status(500).json({ message: 'Failed to cancel booking', error: err.message });
   }
 };
-
 /**
  * Generate OTP:
  *  - Buyer triggers this after payment

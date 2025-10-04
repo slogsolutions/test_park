@@ -23,7 +23,7 @@ class NotificationService {
       data,
       tokens,
     };
-
+      console.log("enter inside the scheduleBookingEndReminders ")
     return await messaging.sendEachForMulticast(message);
   }
 }

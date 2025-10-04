@@ -19,7 +19,7 @@ import axios from 'axios';
 import adminRoutes from "./routes/admin.js";
 import { protect } from './middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
-import { startBookingCompletionCron } from './cronjob.js';
+import { startBookingReminderCron } from './cronjob.js';
 import userTokensRouter from "./routes/userTokenRoutes.js"
 import captainRoutes from './routes/captain.js';
 
@@ -342,4 +342,4 @@ server.listen(PORT, () => {
 });
 
 // IMPORTANT: Start the cron job here - OUTSIDE the socket handlers
-startBookingCompletionCron();
+startBookingReminderCron()
