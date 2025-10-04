@@ -1,4 +1,3 @@
-// backend/controllers/booking.js
 import mongoose from 'mongoose';
 import Booking from '../models/Booking.js';
 import ParkingSpace from '../models/ParkingSpace.js';
@@ -128,11 +127,10 @@ const cleanupOverdueBookings = async () => {
       console.log(`Cleanup: marked booking ${b._id} overdue`);
     }
   } catch (err) {
-    console.error('cleanupOverdueBookings error:', err);
+    console.error('cleanupOverdueBookings error', err);
   }
 };
 
-// run every minute
 setInterval(cleanupOverdueBookings, 60 * 1000);
 cleanupOverdueBookings().catch((e) => console.error(e));
 
@@ -354,14 +352,135 @@ export const getBookingById = async (req, res) => {
   }
 };
 
+/**
+ * Cancel booking (previously deleteById)
+ * - Frontend uses DELETE /api/booking/:bookingId with body { refundPercent } (optional)
+ * - Only booking owner can cancel
+ * - Not allowed within 1 hour of startTime
+ * - Marks booking.status = 'cancelled', records refund details, unmarks availability slot (best-effort), emits update
+ */
 export const deleteById = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    await Booking.findByIdAndDelete(bookingId);
-    res.status(200).json({ message: 'Booking deleted successfully' });
+    const requesterId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) return res.status(400).json({ message: 'Invalid booking id' });
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ message: 'Booking not found' });
+
+    // Only booking owner (buyer) may cancel via this endpoint
+    if (!booking.user || booking.user.toString() !== requesterId.toString()) {
+      return res.status(403).json({ message: 'Not authorized to cancel this booking' });
+    }
+
+    // Do not allow cancelling completed/active/overdue bookings via this endpoint.
+    if (['completed', 'active', 'overdue', 'cancelled'].includes(booking.status)) {
+      return res.status(400).json({ message: `Cannot cancel booking in status '${booking.status}'` });
+    }
+
+    // Determine hours until start
+    let hoursUntilStart = Infinity;
+    if (booking.startTime) {
+      const startTs = new Date(booking.startTime).getTime();
+      if (!isNaN(startTs)) {
+        hoursUntilStart = (startTs - Date.now()) / (1000 * 60 * 60);
+      }
+    }
+
+    // Cancellation not allowed within 1 hour
+    if (hoursUntilStart <= 1) {
+      return res.status(400).json({ message: 'Cancellation not allowed within 1 hour of start time' });
+    }
+
+    // Compute refundPercent:
+    // frontend rules: >3 => 60, >2 => 40, >1 => 10, <=1 => 0
+    const computeCancelRefundPercent = (hrs) => {
+      if (hrs > 3) return 60;
+      if (hrs > 2) return 40;
+      if (hrs > 1) return 10;
+      return 0;
+    };
+
+    // If client passed refundPercent, prefer validated value; otherwise compute
+    let requestedPercent = Number.isFinite(Number(req.body?.refundPercent)) ? Number(req.body.refundPercent) : null;
+    let refundPercent = computeCancelRefundPercent(hoursUntilStart);
+    if (requestedPercent !== null && !isNaN(requestedPercent)) {
+      // don't allow arbitrary percent; clamp to computed percent (can't be larger than allowed)
+      // allow smaller percent only if requested and valid (but typically client shouldn't override)
+      requestedPercent = Math.max(0, Math.min(100, requestedPercent));
+      // only accept requested percent if it is <= computed max percent, otherwise ignore
+      if (requestedPercent <= refundPercent) {
+        refundPercent = requestedPercent;
+      }
+    }
+
+    // Determine paid amount (best-effort)
+    // Prefer booking.totalPrice, otherwise try pricePerHour * duration
+    let paidAmount = Number(booking.totalPrice ?? 0);
+    if (!paidAmount || paidAmount <= 0) {
+      const startTs = booking.startTime ? new Date(booking.startTime).getTime() : null;
+      const endTs = booking.endTime ? new Date(booking.endTime).getTime() : null;
+      let hours = 1;
+      if (startTs && endTs && !isNaN(startTs) && !isNaN(endTs) && endTs > startTs) {
+        hours = Math.max(1, Math.ceil((endTs - startTs) / (1000 * 60 * 60)));
+      }
+      const perHour = Number(booking.pricePerHour ?? booking.priceParking ?? 0) || 0;
+      paidAmount = +(perHour * hours);
+    }
+
+    const refundAmount = +(paidAmount * (refundPercent / 100));
+
+    // Mark booking as cancelled and attach refund meta
+    booking.status = 'cancelled';
+    booking.cancelledAt = new Date();
+    booking.refund = {
+      percent: refundPercent,
+      amount: refundAmount,
+    };
+    // Optionally note who cancelled
+    booking.cancelledBy = requesterId;
+
+    // Try to unmark availability slot (best-effort)
+    try {
+      if (booking.parkingSpace && booking.startTime && booking.endTime) {
+        const startDateMidnight = new Date(booking.startTime);
+        startDateMidnight.setHours(0, 0, 0, 0);
+        await ParkingSpace.findByIdAndUpdate(
+          booking.parkingSpace,
+          { $set: { 'availability.$[dateElem].slots.$[slotElem].isBooked': false } },
+          { arrayFilters: [{ 'dateElem.date': { $eq: startDateMidnight } }, { 'slotElem.startTime': new Date(booking.startTime), 'slotElem.endTime': new Date(booking.endTime) }], new: true }
+        );
+      }
+    } catch (unmarkErr) {
+      console.warn('Warning: failed to unmark availability slot (nonfatal)', unmarkErr);
+    }
+
+    await booking.save();
+
+    // emit update to sockets
+    try {
+      if (global.io) {
+        const populated = await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email');
+        global.io.emit('booking-updated', { booking: populated });
+      }
+    } catch (emitErr) {
+      console.warn('[deleteById] emit error', emitErr);
+    }
+
+    // NOTE: actual payment gateway refund processing should be triggered here if integrated.
+    // For example, queue a refund job with the payment provider using booking.paymentIntentId or similar.
+    // This implementation only records refund amount on the booking and expects a separate payment/refund job to run.
+
+    return res.status(200).json({
+      message: 'Booking cancelled successfully',
+      booking: await Booking.findById(booking._id).populate('parkingSpace').populate('user', 'name email'),
+      refundAmount,
+      refundPercent
+    });
   } catch (err) {
-    console.error('deleteById error', err);
-    res.status(500).json({ message: 'Failed to delete booking', error: err.message });
+    console.error('deleteById error:', err);
+    return res.status(500).json({ message: 'Failed to cancel booking', error: err.message });
   }
 };
 

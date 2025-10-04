@@ -7,6 +7,10 @@ const parkingSpaceSchema = new mongoose.Schema({
     ref: "ParkFinderSecondUser",
     required: true,
   },
+  // backend/models/ParkingSpace.js
+  approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'ParkFinderSecondUser' },
+  approvedAt: { type: Date },
+
   title: {
     type: String,
     required: true,
@@ -16,6 +20,7 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  region: { type: String, index: true, trim: true, lowercase: true },
   isDeleted: {
     type: Boolean,
     default: false,
@@ -94,8 +99,8 @@ const parkingSpaceSchema = new mongoose.Schema({
     type: Number,
   },
   photos: [{
-  type: String
-}],
+    type: String
+  }],
   rating: {
     type: Number,
     min: 0,
@@ -118,9 +123,10 @@ const parkingSpaceSchema = new mongoose.Schema({
   ],
   status: {
     type: String,
-    enum: ["submitted", "pending"],
-    default: "pending",
+    enum: ['submitted', 'pending', 'approved', 'rejected', 'active', 'inactive'],
+    default: 'pending',
   },
+
   createdAt: {
     type: Date,
     default: Date.now,

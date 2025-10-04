@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { RoleProvider, useRole } from "./context/RoleContext";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ToastContainer } from "react-toastify";
@@ -36,8 +36,10 @@ import Profile from "./pages/Profile";
 import { buyerRoutes } from "./routes/BuyerRoutes";
 import { sellerRoutes } from "./routes/SellerRoutes";
 import { useFirebaseMessaging } from "./hooks/useFirebaseMessaging";
-import { useState } from "react";
 import EditProfile from './pages/EditProfile';
+import PhoneVerifyModal from "./components/PhoneVerifyModal"; // 🔹 Added
+import CaptainDashboard from './pages/CaptainDashboard';
+import RequireAuth from "./components/RequireAuth"; // <-- ADDED: import the RequireAuth wrapper
 
 export default function App() {
 
@@ -85,9 +87,20 @@ function HomeOrFront({ user }: { user: any }) {
 function AppRoutes() {
   const { user } = useAuth(); // 🔹 Get user authentication status from context
   const { role } = useRole();
+  const [showPhoneModal, setShowPhoneModal] = useState(false); // 🔹 Added
 
   // Register FCM messaging globally for the running app (active on all routes)
   useFirebaseMessaging(user);
+
+  useEffect(() => {
+  // Show modal only if phoneVerified is explicitly false
+  if (user && user.phoneVerified === false) {
+    setShowPhoneModal(true);
+  } else {
+    setShowPhoneModal(false);
+  }
+}, [user]);
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -102,7 +115,7 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:token" element={<ResetPassword />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
-
+        <Route path="/captain" element={<RequireAuth role="captain"><CaptainDashboard/></RequireAuth>} />
         {/* Shared protected routes */}
         <Route path="/vehicle-details" element={<ProtectedRoute><VehicleDetails /></ProtectedRoute>} />
         <Route path="/add-vechile" element={<ProtectedRoute><AddVehicle /></ProtectedRoute>} />
@@ -123,6 +136,8 @@ function AppRoutes() {
         {user && role === "seller" && sellerRoutes}
       </Routes>
       <ToastContainer position="top-right" />
+      {/* 🔹 Phone verification modal */}
+      {showPhoneModal && <PhoneVerifyModal open={showPhoneModal} onClose={() => setShowPhoneModal(false)} />}
     </div>
   );
 }

@@ -39,6 +39,22 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  isCaptain:
+   { type: Boolean, default: false,
+    },
+  captainAreas:
+   [{ type: String }],
+
+  // NEW: single region assigned to the user (captain)
+  // This field will be used to filter which parking spaces the captain can view/review.
+  // Stored as lowercase for consistent comparisons.
+  region: {
+    type: String,
+    trim: true,
+    lowercase: true,
+    default: null,
+  },
+
   isAdmin: {
     type: Boolean,
     default: false,
